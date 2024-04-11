@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "569652837811",
+    "project_id": "honeyos",
+    "storage_bucket": "honeyos.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:569652837811:android:e95fc2a03a5be81e405fc6",
+        "android_client_info": {
+          "package_name": "com.example.honey_os"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDpRjQU3P1vam1BYcRtDZA1ldTYuYFl3Ok"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
