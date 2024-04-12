@@ -478,7 +478,7 @@ class _userRegisterState extends State<userRegister> {
                             ],
                           ),
 
-                          const SizedBox(height: 30,),
+                          const SizedBox(height: 20,),
 
                           const Text(
                             'honey, tell me your name',
@@ -489,7 +489,7 @@ class _userRegisterState extends State<userRegister> {
                               color: Colors.white,
                             ),
                           ),
-                          const SizedBox(height: 10,),
+                          const SizedBox(height: 5,),
 
                           // Password textfield
                           Container(
@@ -592,7 +592,7 @@ class _userRegisterState extends State<userRegister> {
                           ),
                      
                           
-                          const SizedBox(height: 30,),
+                          const SizedBox(height: 20,),
 
                           const Text(
                             'honey, tell me your secret',
@@ -603,7 +603,7 @@ class _userRegisterState extends State<userRegister> {
                               color: Colors.white,
                             ),
                           ),
-                          const SizedBox(height: 10,),
+                          const SizedBox(height: 5,),
 
                           // Password textfield
                           Container(
@@ -714,7 +714,7 @@ class _userRegisterState extends State<userRegister> {
 
 
                           const Text(
-                          '["honey, [username] [password], please"]',   
+                          '["honey, the username/password is [username]/[password], please"]\n["honey, register me, please"]',
                             textAlign: TextAlign.center,
                             style: TextStyle(
                               fontFamily: 'ABeeZee',
