@@ -16,8 +16,9 @@ class File {
   final String name;
   final String path;
   final String content;
+  final String userId;
 
-  File({required this.id, required this.name, required this.path, required this.content});
+  File({required this.id, required this.name, required this.path, required this.content, required this.userId});
 
   factory File.fromJson(Map<String, dynamic> json) {
     return File(
@@ -25,12 +26,13 @@ class File {
       name: json['name'],
       path: json['path'],
       content: json['content'],
+      userId: json['userId'],
     );
   }
 
   @override
   String toString() {
-    return 'File{id: $id, name: $name, path: $path, content: $content}';
+    return 'File{id: $id, name: $name, path: $path, content: $content, userId: $userId}';
   }
 }
 
@@ -38,14 +40,16 @@ class Folder {
   final String id;
   final String name;
   final String path;
+  final String userId;
 
-  Folder({required this.id, required this.name, required this.path});
+  Folder({required this.id, required this.name, required this.path, required this.userId});
 
   factory Folder.fromJson(Map<String, dynamic> json) {
     return Folder(
       id: json['id'],
       name: json['name'],
       path: json['path'],
+      userId: json['userId'],
     );
   }
 
@@ -55,10 +59,11 @@ class Folder {
 
 class Files extends StatefulWidget {
 
-  const Files({super.key, this.headerName, this.currentPath});
+  const Files({super.key, this.headerName, this.currentPath, required this.userId});
 
   final String? headerName;
   final String? currentPath;
+  final String userId;
 
   @override
   State<Files> createState() => _FilesState();
@@ -161,7 +166,7 @@ class _FilesState extends State<Files> {
                     ),
                     onPressed: () {
                       Navigator.of(context).pushReplacement(
-                        MaterialPageRoute(builder: (context) => const Homescreen(firstTime: false)),
+                        MaterialPageRoute(builder: (context) => Homescreen(firstTime: false, userId: widget.userId,)),
                       );
                     },
                   ),
@@ -195,11 +200,12 @@ class _FilesState extends State<Files> {
                           MaterialPageRoute(builder: (context) => Files(
                             headerName: pathComponents[count - 1],
                             currentPath: newPath,
+                            userId: widget.userId,
                           )),
                         );
                       } else {
                         Navigator.of(context).pushReplacement(
-                          MaterialPageRoute(builder: (context) => const ViewFiles()),
+                          MaterialPageRoute(builder: (context) => ViewFiles(userId: widget.userId)),
                         );
                       }
                     },
@@ -332,6 +338,7 @@ class _FilesState extends State<Files> {
                                                                       .where('name', isEqualTo: _fileName)
                                                                       .where('path', isEqualTo: widget.currentPath)
                                                                       .where('type', isEqualTo: 'folder')
+                                                                      .where('userId', isEqualTo: widget.userId)
                                                                       .get();
 
                                                                   // Check if the query returned any documents
@@ -381,6 +388,7 @@ class _FilesState extends State<Files> {
                                         onPressed: () {
                                           Navigator.of(context).pushReplacement(
                                             MaterialPageRoute(builder: (context) => Files(
+                                              userId: widget.userId,
                                               headerName: folders?[rowIndex * 9 + i].name,
                                               currentPath: '${folders?[rowIndex * 9 + i].path}/${folders?[rowIndex * 9 + i].name}',
                                             )),
@@ -469,6 +477,7 @@ class _FilesState extends State<Files> {
                                                             .where('name', isEqualTo: _fileName)
                                                             .where('path', isEqualTo: widget.currentPath)
                                                             .where('type', isEqualTo: 'file')
+                                                            .where('userId', isEqualTo: widget.userId)
                                                             .get();
 
                                                         // Check if the query returned any documents
@@ -538,6 +547,7 @@ class _FilesState extends State<Files> {
                                                 fileContent: fileContent,
                                                 saveLocation: widget.currentPath!,
                                                 fileId: files![rowIndex * 9 + i - folders!.length].id,
+                                                userId: widget.userId!,
                                               );
                                             },
                                           ).then((value) => fileOpened = false);
@@ -622,6 +632,7 @@ class _FilesState extends State<Files> {
                                           .where('name', isEqualTo: _fileName)
                                           .where('path', isEqualTo: widget.currentPath)
                                           .where('type', isEqualTo: 'folder')
+                                          .where('userId', isEqualTo: widget.userId)
                                           .get();
 
                                       // Check if the query returned any documents
@@ -636,9 +647,10 @@ class _FilesState extends State<Files> {
                                     }
 
                                     // Add the new folder with the unique name
-                                    await FileSystem.add({'name': _fileName, 'path': widget.currentPath, 'type': 'folder'});
+                                    await FileSystem.add({'name': _fileName, 'path': widget.currentPath, 'type': 'folder', 'userId': widget.userId});
                                     _loadFoldersAndFiles();
                                     Navigator.of(context).pop();
+                                    _speak("The folder $_fileName has been created, honey.");
                                   } catch (e) {
                                     print('Error adding folder: $e');
                                   }
@@ -668,6 +680,7 @@ class _FilesState extends State<Files> {
                     ),
                     onPressed: () {
                       Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (context) => FileScreen(
+                        userId: widget.userId,
                         saveLocation: widget.currentPath,
                       )));
                     },
@@ -688,11 +701,10 @@ class _FilesState extends State<Files> {
     try {
       QuerySnapshot querySnapshot = await FileSystem.where('path', isEqualTo: widget.currentPath).get();
       for (var doc in querySnapshot.docs) {
-        if (doc['type'] == 'folder') {
-          folders.add(Folder(id: doc.id, name: doc['name'], path: doc['path']));
-        } else if (doc['type'] == 'file') {
-          files.add(File(id: doc.id, name: doc['name'], path: doc['path'], content: doc['content']));
-          print(File(id: doc.id, name: doc['name'], path: doc['path'], content: doc['content']));
+        if (doc['type'] == 'folder' && doc['userId'] == widget.userId) {
+          folders.add(Folder(id: doc.id, name: doc['name'], path: doc['path'], userId: doc['userId']));
+        } else if (doc['type'] == 'file' && doc['userId'] == widget.userId) {
+          files.add(File(id: doc.id, name: doc['name'], path: doc['path'], content: doc['content'], userId: doc['userId']));
         }
       }
 
@@ -758,7 +770,7 @@ class _FilesState extends State<Files> {
         }
 
         Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (context) => const Homescreen(firstTime: false)),
+          MaterialPageRoute(builder: (context) => Homescreen(firstTime: false, userId: widget.userId)),
         );
       }
 
@@ -768,16 +780,10 @@ class _FilesState extends State<Files> {
         } else {
           String fileName = command.substring(command.indexOf('file') + 5, command.indexOf(' please')).trim();
           try {
-            var querySnapshot = await FileSystem
-                .where('name', isEqualTo: fileName)
-                .where('path', isEqualTo: widget.currentPath)
-                .where('type', isEqualTo: 'file')
-                .get();
 
-            if (querySnapshot.docs.isNotEmpty) {
+            File? file = files?.firstWhere((element) => element.name.toLowerCase() == fileName.toLowerCase(), orElse: () => File(id: '', name: '', path: '', content: '', userId: ''));
+            if (file!.name != '' && file.content != '' && file.path != '') {
               _speak("The file $fileName has been opened, honey.");
-              fileName = querySnapshot.docs.first['name'];
-              fileContent = querySnapshot.docs.first['content'];
               setState(() {
                 fileOpened = true;
               });
@@ -787,10 +793,11 @@ class _FilesState extends State<Files> {
                   context: context,
                   builder: (BuildContext context) {
                     return OpenedFile(
-                      fileName: fileName,
-                      fileContent: fileContent,
+                      fileName: file.name,
+                      fileContent: file.content,
                       saveLocation: widget.currentPath!,
-                      fileId: querySnapshot.docs.first.id,
+                      fileId: file.id,
+                      userId: widget.userId!,
                     );
                   },
                 ).then((value) => fileOpened = false);
@@ -802,6 +809,35 @@ class _FilesState extends State<Files> {
             print('Error opening file: $e');
           }
         }
+      } else if (command.contains("open the folder")) {
+
+        while (Navigator.canPop(context)) {
+          Navigator.pop(context);
+        }
+        Timer(const Duration(milliseconds: 500), () async {
+          String folderName = command.substring(command.indexOf('folder') + 7, command.indexOf(' please')).trim();
+          try {
+
+            Folder? folder = folders?.firstWhere((element) => element.name.toLowerCase() == folderName.toLowerCase(), orElse: () => Folder(id: '', name: '', path: '', userId: ''));
+
+            if (folder!.name != '' && folder.path != '') {
+              Navigator.of(context).pushReplacement(
+                MaterialPageRoute(builder: (context) => Files(
+                  userId: widget.userId,
+                  headerName: folder.name,
+                  currentPath: '${folder.path}/${folder.name}',
+                )),
+              );
+
+            } else {
+              _speak("The folder $folderName does not exist, honey.");
+            }
+          } catch (e) {
+            print('Error opening folder: $e');
+          }
+        });
+
+
       }
 
       else if (command.contains('close the file')) {
@@ -816,6 +852,7 @@ class _FilesState extends State<Files> {
 
         else if (command.contains('create a new file')) {
         Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (context) => FileScreen(
+          userId: widget.userId,
           saveLocation: widget.currentPath,
         )));
         }
@@ -841,6 +878,7 @@ class _FilesState extends State<Files> {
                   .where('name', isEqualTo: fileName)
                   .where('path', isEqualTo: widget.currentPath)
                   .where('type', isEqualTo: 'folder')
+                  .where('userId', isEqualTo: widget.userId)
                   .get();
 
               // Check if the query returned any documents
@@ -858,7 +896,7 @@ class _FilesState extends State<Files> {
             
 
             // Add the new folder with the unique name
-            await FileSystem.add({'name': fileName, 'path': widget.currentPath, 'type': 'folder'});
+            await FileSystem.add({'name': fileName, 'path': widget.currentPath, 'type': 'folder', 'userId': widget.userId});
             _loadFoldersAndFiles();
           } catch (e) {
             print('Error adding folder: $e');
@@ -875,19 +913,12 @@ class _FilesState extends State<Files> {
         String fileName = command.substring(command.indexOf('file') + 5, command.indexOf(' please')).trim();
         try {
       
-          var querySnapshot = await FileSystem
-              .where('name', isEqualTo: fileName)
-              .where('path', isEqualTo: widget.currentPath)
-              .where('type', isEqualTo: 'file')
-              .get();
-          
-          if (querySnapshot.docs.isNotEmpty) {
-         
-            await FileSystem.doc(querySnapshot.docs.first.id).delete();
+          File? file = files!.firstWhere((element) => element.name.toLowerCase() == fileName.toLowerCase(), orElse: () => File(id: '', name: '', path: '', content: '', userId: ''));
+          if (file.name != '' && file.content != '' && file.path != '') {
+            await FileSystem.doc(file.id).delete();
             _loadFoldersAndFiles();
             _speak("The file $fileName has been deleted, honey.");
           } else {
-         
             _speak("The file $fileName does not exist, honey.");
           }
 
@@ -906,20 +937,12 @@ class _FilesState extends State<Files> {
         String fileName = command.substring(command.indexOf('folder') + 7, command.indexOf(' please')).trim();
         try {
    
-          var querySnapshot = await FileSystem
-              .where('name', isEqualTo: fileName)
-              .where('path', isEqualTo: widget.currentPath)
-              .where('type', isEqualTo: 'folder')
-              .get();
-
-   
-          if (querySnapshot.docs.isNotEmpty) {
-      
-            await FileSystem.doc(querySnapshot.docs.first.id).delete();
+          Folder? folder = folders!.firstWhere((element) => element.name.toLowerCase() == fileName.toLowerCase(), orElse: () => Folder(id: '', name: '', path: '', userId: ''));
+          if (folder.name != '' && folder.path != '') {
+            await FileSystem.doc(folder.id).delete();
             _loadFoldersAndFiles();
             _speak("The folder $fileName has been deleted, honey.");
           } else {
-       
             _speak("The folder $fileName does not exist, honey.");
           }
         } catch (e) {
@@ -937,18 +960,10 @@ class _FilesState extends State<Files> {
           String newFileName = command.substring(command.indexOf('to') + 3, command.indexOf(' please'));
           String existingFileId = '';
           try {
-            //Check first if the file exists
-            var querySnapshot = await FileSystem
-                .where('name', isEqualTo: existingFileName)
-                .where('path', isEqualTo: widget.currentPath)
-                .where('type', isEqualTo: 'file')
-                .get();
-
-            if (querySnapshot.docs.isNotEmpty) {
-              _speak("The file $existingFileName does not exist, honey.");
-            } else {
+           File? file = files!.firstWhere((element) => element.name.toLowerCase() == existingFileName.toLowerCase(), orElse: () => File(id: '', name: '', path: '', content: '', userId: ''));
+            if (file.name != '' && file.content != '' && file.path != '') {
+              existingFileId = file.id;
               String baseName = newFileName;
-              existingFileId = querySnapshot.docs.first.id;
               int duplicateCount = 0;
               bool nameExists = true;
 
@@ -958,6 +973,7 @@ class _FilesState extends State<Files> {
                     .where('name', isEqualTo: newFileName)
                     .where('path', isEqualTo: widget.currentPath)
                     .where('type', isEqualTo: 'file')
+                    .where('userId', isEqualTo: widget.userId)
                     .get();
 
                 // Check if the query returned any documents
@@ -973,6 +989,8 @@ class _FilesState extends State<Files> {
 
               await FileSystem.doc(existingFileId).update({'name': newFileName});
               _loadFoldersAndFiles();
+            } else {
+              _speak("The file $existingFileName does not exist, honey.");
             }
           }catch (e) {
               print('Error renaming file: $e');
@@ -991,18 +1009,10 @@ class _FilesState extends State<Files> {
           String newFolderName = command.substring(command.indexOf('to') + 3, command.indexOf(' please'));
           String existingFolderId = '';
           try {
-            //Check first if the folder exists
-            var querySnapshot = await FileSystem
-                .where('name', isEqualTo: existingFolderName)
-                .where('path', isEqualTo: widget.currentPath)
-                .where('type', isEqualTo: 'folder')
-                .get();
-
-            if (querySnapshot.docs.isNotEmpty) {
-              _speak("The folder $existingFolderName does not exist, honey.");
-            } else {
+            Folder? folder = folders!.firstWhere((element) => element.name.toLowerCase() == existingFolderName.toLowerCase(), orElse: () => Folder(id: '', name: '', path: '', userId: ''));
+            if (folder.name != '' && folder.path != '') {
+              existingFolderId = folder.id;
               String baseName = newFolderName;
-              existingFolderId = querySnapshot.docs.first.id;
               int duplicateCount = 0;
               bool nameExists = true;
 
@@ -1012,6 +1022,7 @@ class _FilesState extends State<Files> {
                     .where('name', isEqualTo: newFolderName)
                     .where('path', isEqualTo: widget.currentPath)
                     .where('type', isEqualTo: 'folder')
+                    .where('userId', isEqualTo: widget.userId)
                     .get();
 
                 // Check if the query returned any documents
@@ -1027,6 +1038,8 @@ class _FilesState extends State<Files> {
 
               await FileSystem.doc(existingFolderId).update({'name': newFolderName});
               _loadFoldersAndFiles();
+            } else {
+              _speak("The folder $existingFolderName does not exist, honey.");
             }
           }catch (e) {
             print('Error renaming folder: $e');
@@ -1038,30 +1051,23 @@ class _FilesState extends State<Files> {
       else if (command.contains('read the file')) {
         String fileName = command.substring(command.indexOf('file') + 5, command.indexOf(' please')).trim();
         try {
-          var querySnapshot = await FileSystem
-              .where('name', isEqualTo: fileName)
-              .where('path', isEqualTo: widget.currentPath)
-              .where('type', isEqualTo: 'file')
-              .get();
-
-          if (querySnapshot.docs.isNotEmpty) {
-            
+          File? file = files?.firstWhere((element) => element.name.toLowerCase() == fileName.toLowerCase(), orElse: () => File(id: '', name: '', path: '', content: '', userId: ''));
+          if (file!.name != '' && file.content != '' && file.path != '') {
             _speak("The file $fileName has been opened, honey.");
-            fileName = querySnapshot.docs.first['name'];
-            fileContent = querySnapshot.docs.first['content'];
             setState(() {
               fileOpened = true;
             });
 
-            Timer(const Duration(milliseconds: 100), () async {
+            Timer(const Duration(milliseconds: 500), () async {
               showDialog(
                 context: context,
                 builder: (BuildContext context) {
                   return OpenedFile(
-                    fileName: fileName,
-                    fileContent: fileContent,
+                    fileName: file.name,
+                    fileContent: file.content,
                     saveLocation: widget.currentPath!,
-                    fileId: querySnapshot.docs.first.id,
+                    fileId: file.id,
+                    userId: widget.userId!,
                   );
                 },
               ).then((value) => fileOpened = false);
@@ -1092,7 +1098,7 @@ class _FilesState extends State<Files> {
       }
 
       else if (command.contains('help')) {
-
+        _speak("You can create a new file, create a new folder, delete a file, delete a folder, rename a file, rename a folder, open a file, close a file, read the file, read the text, or go back, honey.");
       } else if (command.contains("Sir Robert")){
         _speak("Sir Robert is a very handsome and intelligent person. He is the best teacher in the world.");
       } else if (command.contains("go back")) {
@@ -1109,13 +1115,14 @@ class _FilesState extends State<Files> {
           Navigator.of(context).pushReplacement(
             MaterialPageRoute(builder: (context) =>
                 Files(
+                  userId: widget.userId,
                   headerName: pathComponents[count - 1],
                   currentPath: newPath,
                 )),
           );
         } else {
           Navigator.of(context).pushReplacement(
-            MaterialPageRoute(builder: (context) => const ViewFiles()),
+            MaterialPageRoute(builder: (context) => ViewFiles(userId: widget.userId)),
           );
         }
       } else if (command.contains("stop")) {
@@ -1326,12 +1333,13 @@ class _TimeWidgetState extends State<TimeWidget> {
 }
 
 class OpenedFile extends StatefulWidget {
-  const OpenedFile({super.key, required this.fileName, required this.fileContent, required this.saveLocation, required this.fileId});
+  const OpenedFile({super.key, required this.fileName, required this.fileContent, required this.saveLocation, required this.fileId, required this.userId});
 
   final String fileName;
   final String fileContent;
   final String saveLocation;
   final String fileId;
+  final String userId;
 
   @override
   _OpenedFileState createState() => _OpenedFileState();
@@ -1433,6 +1441,7 @@ class _OpenedFileState extends State<OpenedFile> {
                     ),
                     onPressed: () {
                       Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (context) => FileScreen(
+                        userId: widget.userId,
                         saveLocation: widget.saveLocation,
                         fileName: widget.fileName,
                         fileContent: widget.fileContent,

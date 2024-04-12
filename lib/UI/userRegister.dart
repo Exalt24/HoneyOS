@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:hexagon/hexagon.dart';
 import 'package:honey_os/UI/userscreen.dart';
@@ -60,7 +61,7 @@ class _userRegisterState extends State<userRegister> {
     super.initState();
     _responseSpoken = false;
     Timer(const Duration(milliseconds: 500), () {
-      _speak("Welcome to Honey OS. I am your personal assistant, Honey. I am here to help you register. Please provide me with your username and password.");
+      _speak("I'm excited to meet you. Let's get you registered.");
     });
   }
 
@@ -196,14 +197,27 @@ class _userRegisterState extends State<userRegister> {
     _interruptSpeaking();
     Timer(const Duration(milliseconds: 500), () async {
       if (command.contains("username is")) {
-        _name = command.substring(command.indexOf("username is") + 11, command.indexOf( "please"));
+        _name = command.substring(command.indexOf("username is") + 12, command.indexOf(" please"));
+        if (_name.length > 10) {
+          _name = _name.substring(0, 10);
+        }
+        _nameController.text = _name;
+        setState(() {
+        });
         _speak("Your username is $_name. Is this correct?");
       } else if (command.contains("password is")) {
-        _password = command.substring(command.indexOf("password is") + 11, command.indexOf( "please"));
-        _speak("Your password is $_password. Is this correct?");
+        _password = command.substring(command.indexOf("password is") + 12, command.indexOf(" please"));
+        _password = _password.replaceAll(" ", "");
+        if (_password.length > 10) {
+          _password = _password.substring(0, 10);
+        }
+        _passController.text = _password;
+        setState(() {
+        });
+        _speak("Your password is ... Oops, just kidding. I can't say that out loud. Is this correct?");
       } else if (command.contains("register me")) {
 
-        if (_name.isEmpty && _password.isEmpty) {
+        if (_name == "" || _password == "") {
           _speak("I'm sorry. You need to provide a username and password.");
         } else {
           showDialog(
@@ -297,6 +311,10 @@ class _userRegisterState extends State<userRegister> {
         'profile_picture': await ref.getDownloadURL(),
       });
     }
+    _nameController.clear();
+    _passController.clear();
+    _name = '';
+    _password = '';
     _speak("You have been registered successfully. {$_name}, you can now log in.");
     Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const UserScreen()));
   }
@@ -401,7 +419,7 @@ class _userRegisterState extends State<userRegister> {
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.start,
                         children: [
-                          const SizedBox(height: 50,),
+                          const SizedBox(height: 20,),
                           
                           // for User Pic
                           Stack(
@@ -430,10 +448,14 @@ class _userRegisterState extends State<userRegister> {
                                   width: size.width *0.24,
                                   child: InkWell(
                                     onTap: () {
-                                      FilePicker.platform.pickFiles().then((value) {
+                                      FilePicker.platform.pickFiles(
+                                        type: FileType.image,
+                                        allowMultiple: false,
+                                      ).then((value) {
                                         if (value != null) {
                                           Uint8List? bytes = value.files.single.bytes;
                                           if (bytes != null) {
+                                            _speak("Wow you look very handsome just like Sir Robert.");
                                             setState(() {
                                               imageBytes = bytes;
                                             });
@@ -487,6 +509,9 @@ class _userRegisterState extends State<userRegister> {
                               onChanged: (value) {
                                 _name = value;
                               },
+                              inputFormatters: [
+                                FilteringTextInputFormatter.deny(RegExp(r"\s")),
+                              ],
                               onFieldSubmitted: (value) {
                                 if (_name.isNotEmpty && _password.isNotEmpty) {
                                   showDialog(
@@ -601,6 +626,9 @@ class _userRegisterState extends State<userRegister> {
                               onChanged: (value) {
                                 _password = value;
                               },
+                              inputFormatters: [
+                                FilteringTextInputFormatter.deny(RegExp(r"\s")),
+                              ],
                               onFieldSubmitted: (value) {
                                 if (_name.isNotEmpty && _password.isNotEmpty) {
                                   showDialog(

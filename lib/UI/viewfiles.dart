@@ -24,7 +24,9 @@ class Disk {
 
 class ViewFiles extends StatefulWidget {
 
-  const ViewFiles({super.key});
+  const ViewFiles({super.key, required this.userId});
+
+  final String userId;
 
 
   @override
@@ -124,7 +126,7 @@ class _ViewFilesState extends State<ViewFiles> {
                     ),
                     onPressed: () {
                       Navigator.of(context).pushReplacement(
-                        MaterialPageRoute(builder: (context) => const Homescreen(firstTime: false)),
+                        MaterialPageRoute(builder: (context) => Homescreen(firstTime: false, userId: widget.userId)),
                       );
                     },
                   ),
@@ -195,6 +197,7 @@ class _ViewFilesState extends State<ViewFiles> {
                                             MaterialPageRoute(builder: (context) => Files(
                                               headerName: disks![i].name ?? '',
                                               currentPath: '${disks![i].path}/${disks![i].name}'?? '',
+                                              userId: widget.userId,
                                             )),
                                           );
                                         },
@@ -306,7 +309,7 @@ class _ViewFilesState extends State<ViewFiles> {
         }
 
         Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (context) => const Homescreen(firstTime: false)),
+          MaterialPageRoute(builder: (context) => Homescreen(firstTime: false, userId: widget.userId,)),
         );
       }
 
@@ -319,6 +322,7 @@ class _ViewFilesState extends State<ViewFiles> {
           // If a Disk with the given name is found, navigate to the Files screen
           Navigator.of(context).pushReplacement(
             MaterialPageRoute(builder: (context) => Files(
+              userId: widget.userId,
               headerName: drive.name,
               currentPath: '${drive.path}/${drive.name}',
             )),
