@@ -13,9 +13,10 @@ import 'package:speech_to_text/speech_to_text.dart';
 class Homescreen extends StatefulWidget {
 
 
-  const Homescreen({super.key, this.firstTime, this.name});
+  const Homescreen({super.key, this.firstTime, this.name, required this.userId});
   final bool? firstTime; // Add a parameter to indicate if it's the first time
   final String? name;
+  final String userId;
 
   @override
   State<Homescreen> createState() => _HomescreenState();
@@ -121,7 +122,7 @@ class _HomescreenState extends State<Homescreen> {
         _speak("Sure");
         Timer(const Duration(seconds: 1), () {
           Navigator.of(context).pushReplacement(
-              MaterialPageRoute(builder: (context) => const FileScreen()));
+              MaterialPageRoute(builder: (context) => FileScreen(userId: widget.userId)));
         });
       }
 
@@ -129,7 +130,7 @@ class _HomescreenState extends State<Homescreen> {
         _speak("Sure");
         Timer(const Duration(seconds: 1), () {
           Navigator.of(context).pushReplacement(
-              MaterialPageRoute(builder: (context) => const ViewFiles()));
+              MaterialPageRoute(builder: (context) => ViewFiles(userId: widget.userId)));
         });
       }
 
@@ -211,6 +212,7 @@ class _HomescreenState extends State<Homescreen> {
                   MaterialPageRoute(
                       builder: (context) =>
                           FileScreen(
+                            userId: widget.userId,
                             fileName: _fileName,
                             fileContent: fileContent,
                             fileOpened: true,
@@ -514,7 +516,7 @@ class _HomescreenState extends State<Homescreen> {
                       ),
                       onPressed: () {
 
-                        Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (context) => const FileScreen()));
+                        Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (context) => FileScreen(userId: widget.userId)));
                       },
                     ),
                   ),
@@ -555,6 +557,7 @@ class _HomescreenState extends State<Homescreen> {
                                    MaterialPageRoute(
                                        builder: (context) =>
                                            FileScreen(
+                                             userId: widget.userId,
                                              fileName: _fileName,
                                              fileContent: fileContent,
                                              fileOpened: true,
@@ -697,7 +700,7 @@ class _HomescreenState extends State<Homescreen> {
                         //color: Color.fromARGB(255, 255, 177, 0),
                         ),
                         onPressed: (){
-                          Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (context) => const ViewFiles()));
+                          Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (context) => ViewFiles(userId: widget.userId)));
                         },
                       ),
                     )

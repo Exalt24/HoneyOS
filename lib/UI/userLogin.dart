@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:hexagon/hexagon.dart';
 import 'package:honey_os/UI/userscreen.dart';
@@ -9,9 +10,9 @@ import 'package:speech_to_text/speech_recognition_result.dart';
 import 'package:honey_os/UI/homescreen.dart';
 
 class userLogin extends StatefulWidget {
-  const userLogin({super.key, this.userName, this.userId, this.profileImage});
+  const userLogin({super.key, this.userName, required this.userId, this.profileImage});
   final String? userName;
-  final String? userId;
+  final String userId;
   final String? profileImage;
   @override
   State<userLogin> createState() => _userLoginState();
@@ -56,7 +57,7 @@ class _userLoginState extends State<userLogin> {
     _responseSpoken = false;
     fetchPassword();
     Timer(const Duration(milliseconds: 500), () =>
-    _speak("Hello, ${widget.userName}. Please tell me your secret."));
+    _speak("Hello, ${widget.userName}. Tell me your secret."));
   }
 
   void fetchPassword() async {
@@ -68,7 +69,6 @@ class _userLoginState extends State<userLogin> {
     if (userSnapshot.exists) {
       // If a document was found, get the password
       fetchedPassword = userSnapshot.get('password');
-      print('Password for ${widget.userName} is $fetchedPassword');
     } else {
       // If no document was found, handle the error (e.g., set password to null, show an error message, etc.)
       fetchedPassword = '';
@@ -204,10 +204,29 @@ class _userLoginState extends State<userLogin> {
     Timer(const Duration(milliseconds: 500), () async {
       if (command.contains("password is")) {
 
-        String password = command.substring(command.indexOf("password is") + 11, command.indexOf(" please"));
+        String password = command.substring(command.indexOf("password is") + 12, command.indexOf(" please"));
+        password = password.replaceAll(" ", "");
         if (password == fetchedPassword) {
-          Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (context) => Homescreen(firstTime: true, name: widget.userName)));
+          Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (context) => Homescreen(firstTime: true, name: widget.userName, userId: widget.userId)));
         } else {
+          print("The password is $fetchedPassword but you said $password");
+          showDialog(
+            context: context,
+            builder: (BuildContext context) {
+              return AlertDialog(
+                title: Text('Error'),
+                content: Text("Wrong Password."),
+                actions: <Widget>[
+                  TextButton(
+                    child: Text('OK'),
+                    onPressed: () {
+                      Navigator.of(context).pop();
+                    },
+                  ),
+                ],
+              );
+            },
+          );
           _speak("I'm sorry, that's not the correct password.");
         }
       } else if (command.contains("stop")) {
@@ -407,9 +426,12 @@ class _userLoginState extends State<userLogin> {
                                   _password = value;
                                 });
                               },
+                              inputFormatters: [
+                                FilteringTextInputFormatter.deny(RegExp(r"\s")),
+                              ],
                               onSubmitted: (value) {
                                 if (_password == fetchedPassword) {
-                                  Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (context) =>  Homescreen(firstTime: true, name: widget.userName)));
+                                  Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (context) =>  Homescreen(firstTime: true, name: widget.userName, userId: widget.userId)));
                                 } else {
                                   showDialog(
                                     context: context,

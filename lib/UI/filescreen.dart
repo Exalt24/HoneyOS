@@ -53,14 +53,16 @@ class Folder {
   final String id;
   final String name;
   final String path;
+  final String userId;
 
-  Folder({required this.id, required this.name, required this.path});
+  Folder({required this.id, required this.name, required this.path, required this.userId});
 
   factory Folder.fromJson(Map<String, dynamic> json) {
     return Folder(
       id: json['id'],
       name: json['name'],
       path: json['path'],
+      userId: json['userId'],
     );
   }
 
@@ -87,7 +89,7 @@ class File {
 
 
 class FileScreen extends StatefulWidget {
-  const FileScreen({super.key, this.fileName, this.fileContent, this.fileOpened, this.saveLocation, this.fileId });
+  const FileScreen({super.key, this.fileName, this.fileContent, this.fileOpened, this.saveLocation, this.fileId, required this.userId });
 
 
   final String? fileName;
@@ -95,6 +97,7 @@ class FileScreen extends StatefulWidget {
   final bool? fileOpened;
   final String? saveLocation;
   final String? fileId;
+  final String userId;
 
 
   @override
@@ -249,6 +252,7 @@ class _FileScreenState extends State<FileScreen> {
                                     //color: Color.fromARGB(255, 255, 177, 0),
                                   ),
                                   onPressed: () {
+
                                     saveFile();
                                   },
                                 ),
@@ -355,7 +359,7 @@ class _FileScreenState extends State<FileScreen> {
                           }
 
                           Navigator.of(context).pushReplacement(
-                            MaterialPageRoute(builder: (context) => const Homescreen(firstTime: false)),
+                            MaterialPageRoute(builder: (context) => Homescreen(firstTime: false, userId: widget.userId)),
                           );
                         },
                       ),
@@ -482,8 +486,10 @@ class _FileScreenState extends State<FileScreen> {
     try {
       QuerySnapshot querySnapshot = await FileSystem.get();
       for (var doc in querySnapshot.docs) {
-        if (doc['type'] == 'folder') {
-          folders.add(Folder(id: doc.id, name: doc['name'], path: doc['path']));
+        if (doc['type'] == 'disk') {
+          folders.add(Folder(id: doc.id, name: doc['name'], path: doc['path'], userId: widget.userId));
+        } else if (doc['type'] == 'folder' && doc['userId'] == widget.userId) {
+          folders.add(Folder(id: doc.id, name: doc['name'], path: doc['path'], userId: doc['userId']));
         }
       }
 
@@ -503,11 +509,23 @@ class _FileScreenState extends State<FileScreen> {
       context: context,
       builder: (BuildContext context) {
         return FileNameWidget(fileName: _fileName,
-          onFileNameChanged: (String newFileName) {
+          onFileNameChanged: (String newFileName) async {
             setState(() {
               _fileName = newFileName;
             });
-            _speak("The file name has been changed to ${newFileName.substring(0, newFileName.length - 4)}.");
+
+            if (widget.fileName != null && widget.fileContent != null && widget.fileId != null && widget.saveLocation != null) {
+              await FileSystem.doc(widget.fileId).update({
+                'name': newFileName,
+              });
+
+            }
+
+            if (newFileName.length > 20) {
+              _speak("The file name has been changed to ${newFileName.substring(0, 20)}.");
+            } else {
+              _speak("The file name has been changed to $newFileName.");
+            }
           },
 
         );
@@ -568,7 +586,7 @@ class _FileScreenState extends State<FileScreen> {
 
   //save
   Future<void> saveFile() async {
-    String folderName = saveLocation != "" ? saveLocation.substring(saveLocation.lastIndexOf('/') + 1) : '';
+    String folderName = saveLocation != ''  ? saveLocation.substring(saveLocation.lastIndexOf('/') + 1) : '';
   try {
     if (saveLocation != '' && _fileId != '') {
 
@@ -612,6 +630,7 @@ class _FileScreenState extends State<FileScreen> {
         'name': _fileName,
         'path': saveLocation,
         'type': 'file',
+        'userId': widget.userId,
       });
       _speak("The file has been saved.");
     } else {
@@ -619,6 +638,7 @@ class _FileScreenState extends State<FileScreen> {
         context: context,
         builder: (BuildContext context) {
           return FolderPickerDialog(
+            userId: widget.userId,
             folders: folders,
             onPathSelected: (String path) {
               Navigator.pop(context, path);
@@ -640,6 +660,7 @@ class _FileScreenState extends State<FileScreen> {
               .where('name', isEqualTo: _fileName)
               .where('path', isEqualTo: saveLocation)
               .where('type', isEqualTo: 'file')
+              .where('userId', isEqualTo: widget.userId)
               .get();
 
           // Check if the query returned any documents
@@ -658,6 +679,7 @@ class _FileScreenState extends State<FileScreen> {
           'name': _fileName,
           'path': saveLocation,
           'type': 'file',
+          'userId': widget.userId,
         });
         _speak("The file has been saved.");
         changesOnText = false;
@@ -673,6 +695,7 @@ class _FileScreenState extends State<FileScreen> {
           MaterialPageRoute(builder: (context) => Files(
             headerName: folderName,
             currentPath: saveLocation,
+            userId: widget.userId
           )
           ),
         );
@@ -690,6 +713,7 @@ class _FileScreenState extends State<FileScreen> {
       context: context,
       builder: (BuildContext context) {
         return FolderPickerDialog(
+          userId: widget.userId,
           folders: folders,
           onPathSelected: (String path) {
             Navigator.pop(context, path);
@@ -711,6 +735,7 @@ class _FileScreenState extends State<FileScreen> {
             .where('name', isEqualTo: _fileName)
             .where('path', isEqualTo: saveLocation)
             .where('type', isEqualTo: 'file')
+            .where('userId', isEqualTo: widget.userId)
             .get();
 
         // Check if the query returned any documents
@@ -729,6 +754,7 @@ class _FileScreenState extends State<FileScreen> {
         'name': _fileName,
         'path': saveLocation,
         'type': 'file',
+        'userId': widget.userId,
       });
       _speak("The file has been saved.");
       changesOnText = false;
@@ -736,6 +762,7 @@ class _FileScreenState extends State<FileScreen> {
         MaterialPageRoute(builder: (context) => Files(
           headerName: folderName,
           currentPath: saveLocation,
+          userId: widget.userId,
         )
         ),
       ));
@@ -904,7 +931,7 @@ class _FileScreenState extends State<FileScreen> {
       }
 
       Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (context) => const Homescreen(firstTime: false)),
+        MaterialPageRoute(builder: (context) => Homescreen(firstTime: false, userId: widget.userId)),
       );
     }
 
@@ -1319,8 +1346,9 @@ class _FileNameWidgetState extends State<FileNameWidget> {
 class FolderPickerDialog extends StatefulWidget {
   final List<Folder>? folders;
   final Function(String) onPathSelected;
+  final String? userId;
 
-  const FolderPickerDialog({super.key, this.folders, required this.onPathSelected});
+  const FolderPickerDialog({super.key, required this.folders, required this.onPathSelected, this.userId});
 
   @override
   _FolderPickerDialogState createState() => _FolderPickerDialogState();
@@ -1384,7 +1412,6 @@ class _FolderPickerDialogState extends State<FolderPickerDialog> {
                 },
               ),
             ),
-            // Text for the selected path and take into account of the space so if it overflows it should be left side of the text getting ellipsed
 
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -1395,6 +1422,7 @@ class _FolderPickerDialogState extends State<FolderPickerDialog> {
                   },
                   child: const Text('Cancel'),
                 ),
+                if (currentPath != '/FileSystem') // Show save button if not at root
                 ElevatedButton(
                   onPressed: () {
                     widget.onPathSelected(currentPath);
