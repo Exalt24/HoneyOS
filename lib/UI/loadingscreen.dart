@@ -40,7 +40,7 @@ class _LoadingScreen extends State<LoadingScreen> {
         child: SizedBox(
           width: size.width,
           height: size.height,
-          child: Image.asset('newloadingscreen.gif', fit: BoxFit.fill),
+          child: Image.asset('assets/newloadingscreen.gif', fit: BoxFit.fill),
         ),
       ),
     );

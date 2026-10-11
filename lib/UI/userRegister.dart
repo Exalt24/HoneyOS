@@ -316,6 +316,10 @@ class _userRegisterState extends State<userRegister> {
     _name = '';
     _password = '';
     _speak("You have been registered successfully. {$_name}, you can now log in.");
+    // Close the "Registering..." dialog first. Without this, pushReplacement
+    // replaces the dialog route and leaves this register screen (and its
+    // speech listener) alive underneath the user screen.
+    Navigator.of(context).pop();
     Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const UserScreen()));
   }
 
