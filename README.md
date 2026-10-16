@@ -27,9 +27,13 @@ The microphone part is simulated: headless Chromium has no speech engine, so the
 
 ## Run it locally
 
-You need the Flutter SDK, Node 18 or newer, JDK 21 or newer (for the emulators) and Chrome or Edge. This is the setup the recording used, with no hosted Firebase involved.
+You need the Flutter SDK, Node 18 or newer, JDK 21 or newer (for the emulators) and Chrome or Edge. This is the setup the recording used, with no hosted Firebase involved. The repo does not track Firebase config, so a fresh clone needs the placeholder file from step 0 before it compiles.
 
 ```bash
+# 0. Create the config file the app imports, then set projectId to honeyos and storageBucket to honeyos.appspot.com in it
+#    (the ids the emulator and seed script use; no real project is contacted)
+cp lib/firebase_options.dart.example lib/firebase_options.dart
+
 # 1. Start the Firebase emulators (Firestore on 8080, Storage on 9199)
 npx firebase-tools emulators:start --only firestore,storage --project honeyos --config emulator/firebase.json
 
@@ -45,10 +49,18 @@ cd build/web && python -m http.server 8000
 Then open http://localhost:8000 in Chrome or Edge and allow the microphone when asked.
 
 - The emulator rules in `emulator/` are wide open on purpose; they are for local use only.
-- Without `FIREBASE_EMULATOR_HOST` the app behaves as it always did and talks to the Firebase project in `lib/main.dart` and `lib/firebase_options.dart`, which is the author's own `honeyos` project. There is no hosted copy, and I did not check that project is still alive.
+- Without `FIREBASE_EMULATOR_HOST` the app talks to whatever Firebase project your config files point at (see Firebase setup below). There is no hosted copy.
 - For the recording the emulators ran on ports 4901 and 4902 because the defaults were taken on my machine, so I built with `--dart-define=FIRESTORE_EMULATOR_PORT=4901 --dart-define=STORAGE_EMULATOR_PORT=4902`. Those two defines exist for exactly that.
 - Even with the emulators, the page loads the Firebase JavaScript SDK from Google's CDN, so it needs internet access.
 - On Windows, `flutter pub get` needs Developer Mode switched on so plugins can create symlinks.
+
+## Firebase setup
+
+To run against a real backend instead of the emulators, use your own Firebase project. The repo ships no project config: the generated files are git-ignored and `.example` files beside them show their shape.
+
+1. Create a Firebase project and enable Cloud Firestore and Cloud Storage. They are the only services the app uses.
+2. Run `flutterfire configure` in the repo root. It writes `lib/firebase_options.dart`, `android/app/google-services.json`, `ios/Runner/GoogleService-Info.plist` and `macos/Runner/GoogleService-Info.plist`. `lib/main.dart` reads only the web options; the other platforms pick up their own file.
+3. In the Google Cloud console (APIs and Services, Credentials), restrict your key to your bundle ids and to the Firestore and Cloud Storage APIs, and write security rules for both, since the emulator rules in `emulator/` are open.
 
 ## Limits worth knowing
 
@@ -67,7 +79,7 @@ Flutter and Dart. `cloud_firestore`, `firebase_storage` and `firebase_core` for 
 ```
 lib/
   main.dart              Entry point, optional emulator switch
-  firebase_options.dart  FlutterFire config for the author's Firebase project
+  firebase_options.dart  Your FlutterFire config (git-ignored, see firebase_options.dart.example)
   UI/
     loadingscreen.dart   Boot animation
     userscreen.dart      Hexagon user picker
@@ -83,7 +95,7 @@ docs/demo.gif            The recording at the top of this page
 
 ## Security
 
-The Firebase client config files (`ios/Runner/GoogleService-Info.plist`, `macos/Runner/GoogleService-Info.plist` and `lib/firebase_options.dart`) are committed, as FlutterFire generates them. A Firebase client key identifies the project rather than granting access, but it should still be restricted in the Google Cloud console (APIs and Services, Credentials) to this app's bundle id, and the app's data must be protected by Firestore and Storage security rules. The emulator setup in this repo uses open rules and is for local use only.
+The Firebase client config for the author's own project was committed in earlier versions and remains in the git history; it is no longer tracked. Firebase client keys identify a project rather than grant access, so what protects data is Firestore and Storage security rules, which this repo does not ship for a hosted project. The emulator rules in `emulator/` are open and are for local use only.
 
 ## Context
 
