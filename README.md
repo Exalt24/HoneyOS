@@ -81,6 +81,10 @@ emulator/                Firebase emulator config, open rules and seed script
 docs/demo.gif            The recording at the top of this page
 ```
 
+## Security
+
+The Firebase client config files (`ios/Runner/GoogleService-Info.plist`, `macos/Runner/GoogleService-Info.plist` and `lib/firebase_options.dart`) are committed, as FlutterFire generates them. A Firebase client key identifies the project rather than granting access, but it should still be restricted in the Google Cloud console (APIs and Services, Credentials) to this app's bundle id, and the app's data must be protected by Firestore and Storage security rules. The emulator setup in this repo uses open rules and is for local use only.
+
 ## Context
 
 HoneyOS was built as a university project exploring how to model an operating-system interface, with voice as the main input, as a Flutter application backed by a cloud service.
