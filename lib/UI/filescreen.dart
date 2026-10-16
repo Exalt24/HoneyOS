@@ -110,14 +110,12 @@ class _FileScreenState extends State<FileScreen> {
   late String _fileName;
   late String _fileId;
 
-  final CollectionReference FileSystem = FirebaseFirestore.instance.collection('FileSystem');
+  final CollectionReference fileSystem = FirebaseFirestore.instance.collection('FileSystem');
   List<Folder>? folders;
 
   String? fileContent;
   final FlutterTts _flutterTts = FlutterTts();
-  bool _flutterTtsInitialized = false;
   final SpeechToText _speechToText = SpeechToText();
-  bool _speechEnabled = true;
   String _lastWords = '';
   String command =  '';
   bool _isStoppingAndRestarting = false;
@@ -165,12 +163,10 @@ class _FileScreenState extends State<FileScreen> {
             children: [
               // Background Image
               Center(
-                child: Container(
-                  child: Image.asset(
+                child: Image.asset(
                     'assets/background/FilesBackground.png', // Replace with your image path
                     fit: BoxFit.fitHeight,
                   ),
-                ),
               ),
 
               //Time Widget
@@ -348,6 +344,7 @@ class _FileScreenState extends State<FileScreen> {
                                     TextButton(
                                       onPressed: () async {
                                         await saveFile();
+                                        if (!context.mounted) return;
                                         Navigator.pop(context);
                                       },
                                       child: const Text('Yes'),
@@ -358,6 +355,7 @@ class _FileScreenState extends State<FileScreen> {
                             );
                           }
 
+                          if (!context.mounted) return;
                           Navigator.of(context).pushReplacement(
                             MaterialPageRoute(builder: (context) => Homescreen(firstTime: false, userId: widget.userId)),
                           );
@@ -471,7 +469,7 @@ class _FileScreenState extends State<FileScreen> {
 
         setState(() {
           changesOnText = trimmedValue != trimmedFileContent;
-          print(changesOnText);
+          debugPrint('$changesOnText');
           _controller.performAction(value);
         });
       },
@@ -484,13 +482,18 @@ class _FileScreenState extends State<FileScreen> {
   Future<void> _loadFolders() async {
     List<Folder> folders = [];
     try {
-      QuerySnapshot querySnapshot = await FileSystem.get();
-      for (var doc in querySnapshot.docs) {
-        if (doc['type'] == 'disk') {
-          folders.add(Folder(id: doc.id, name: doc['name'], path: doc['path'], userId: widget.userId));
-        } else if (doc['type'] == 'folder' && doc['userId'] == widget.userId) {
-          folders.add(Folder(id: doc.id, name: doc['name'], path: doc['path'], userId: doc['userId']));
-        }
+      // Two queries, because the security rules only let a user read the shared
+      // disk documents and their own folders.
+      final QuerySnapshot disks = await fileSystem.where('type', isEqualTo: 'disk').get();
+      for (var doc in disks.docs) {
+        folders.add(Folder(id: doc.id, name: doc['name'], path: doc['path'], userId: widget.userId));
+      }
+      final QuerySnapshot own = await fileSystem
+          .where('type', isEqualTo: 'folder')
+          .where('userId', isEqualTo: widget.userId)
+          .get();
+      for (var doc in own.docs) {
+        folders.add(Folder(id: doc.id, name: doc['name'], path: doc['path'], userId: doc['userId']));
       }
 
       setState(() {
@@ -498,7 +501,7 @@ class _FileScreenState extends State<FileScreen> {
       });
 
     } catch (e) {
-      print("Error loading files and folders: $e");
+      debugPrint("Error loading files and folders: $e");
     }
   }
 
@@ -515,7 +518,7 @@ class _FileScreenState extends State<FileScreen> {
             });
 
             if (widget.fileName != null && widget.fileContent != null && widget.fileId != null && widget.saveLocation != null) {
-              await FileSystem.doc(widget.fileId).update({
+              await fileSystem.doc(widget.fileId).update({
                 'name': newFileName,
               });
 
@@ -537,16 +540,13 @@ class _FileScreenState extends State<FileScreen> {
   //openfile
   Future<void> openFile() async {
     fileExplorerShown = true;
-    FilePickerResult? result = await FilePicker.platform.pickFiles(
+    final PlatformFile? file = await FilePicker.pickFile(
       type: FileType.custom,
       allowedExtensions: ['txt'],
-      allowMultiple: false,
     );
 
-
-    if (result != null && result.files.isNotEmpty) {
-     PlatformFile file = result.files.first;
-      fileContent = file.bytes != null ? utf8.decode(file.bytes!) : null;
+    if (file != null) {
+      fileContent = utf8.decode(await file.readAsBytes());
       _fileName = file.name.length > 20 ? file.name.substring(0, 20) : file.name;
 
 
@@ -590,7 +590,7 @@ class _FileScreenState extends State<FileScreen> {
   try {
     if (saveLocation != '' && _fileId != '') {
 
-        await FileSystem.doc(_fileId).update({
+        await fileSystem.doc(_fileId).update({
           'content': _controller.textEditingController.text,
           'name': _fileName,
         });
@@ -608,10 +608,11 @@ class _FileScreenState extends State<FileScreen> {
 
       while (nameExists) {
         // Query Firestore for a folder with the same name and path
-        var querySnapshot = await FileSystem
+        var querySnapshot = await fileSystem
             .where('name', isEqualTo: _fileName)
             .where('path', isEqualTo: saveLocation)
             .where('type', isEqualTo: 'file')
+            .where('userId', isEqualTo: widget.userId)
             .get();
 
         // Check if the query returned any documents
@@ -625,7 +626,7 @@ class _FileScreenState extends State<FileScreen> {
         }
       }
 
-      await FileSystem.add({
+      await fileSystem.add({
         'content': _controller.textEditingController.text,
         'name': _fileName,
         'path': saveLocation,
@@ -656,7 +657,7 @@ class _FileScreenState extends State<FileScreen> {
 
         while (nameExists) {
           // Query Firestore for a folder with the same name and path
-          var querySnapshot = await FileSystem
+          var querySnapshot = await fileSystem
               .where('name', isEqualTo: _fileName)
               .where('path', isEqualTo: saveLocation)
               .where('type', isEqualTo: 'file')
@@ -674,7 +675,7 @@ class _FileScreenState extends State<FileScreen> {
           }
         }
 
-        await FileSystem.add({
+        await fileSystem.add({
           'content': _controller.textEditingController.text,
           'name': _fileName,
           'path': saveLocation,
@@ -702,7 +703,7 @@ class _FileScreenState extends State<FileScreen> {
       }
     });
   } catch (e) {
-    print("Error saving file: $e");
+    debugPrint("Error saving file: $e");
   }
 
   }
@@ -731,7 +732,7 @@ class _FileScreenState extends State<FileScreen> {
 
       while (nameExists) {
         // Query Firestore for a folder with the same name and path
-        var querySnapshot = await FileSystem
+        var querySnapshot = await fileSystem
             .where('name', isEqualTo: _fileName)
             .where('path', isEqualTo: saveLocation)
             .where('type', isEqualTo: 'file')
@@ -749,7 +750,7 @@ class _FileScreenState extends State<FileScreen> {
         }
       }
 
-      await FileSystem.add({
+      await fileSystem.add({
         'content': _controller.textEditingController.text,
         'name': _fileName,
         'path': saveLocation,
@@ -787,13 +788,15 @@ class _FileScreenState extends State<FileScreen> {
     }
   }
   void _initSpeech() async {
-    _speechEnabled = await _speechToText.initialize();
+    await _speechToText.initialize();
+    if (!mounted) return;
     setState(() {
       _startListening();
     });
   }
 
   void _onSpeechResult(SpeechRecognitionResult result) {
+    if (!mounted) return; // a late result for a screen that is already gone
     String recognizedWords = result.recognizedWords.toLowerCase();
 
     if (recognizedWords.contains("honey")) {
@@ -920,6 +923,7 @@ class _FileScreenState extends State<FileScreen> {
                 TextButton(
                   onPressed: () async {
                     await saveFile();
+                    if (!context.mounted) return;
                     Navigator.pop(context);
                   },
                   child: const Text('Yes'),
@@ -930,6 +934,7 @@ class _FileScreenState extends State<FileScreen> {
         );
       }
 
+      if (!context.mounted) return;
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(builder: (context) => Homescreen(firstTime: false, userId: widget.userId)),
       );
@@ -1021,24 +1026,24 @@ class _FileScreenState extends State<FileScreen> {
     try {
       await _flutterTts.setVoice({"name": "Microsoft Aria Online (Natural) - English (United States)", "locale": "en-US"});
       await _flutterTts.setSpeechRate(1.25);
+      if (!mounted) return;
       setState(() {
-        _flutterTtsInitialized = true; // Update the initialization status
       });
       // First time only
       Timer(const Duration(milliseconds: 500), () => _speak("You are now in the file screen."));
 
 
     } catch (e) {
-      print("Error initializing TTS: $e");
+      debugPrint("Error initializing TTS: $e");
     }
   }
 
 
-  Future<void> _speak(text) async{
+  Future<void> _speak(String text) async{
     try {
       await _flutterTts.speak(text);
     } catch (e) {
-      print("Error speaking: $e");
+      debugPrint("Error speaking: $e");
     }
   }
 
@@ -1046,7 +1051,7 @@ class _FileScreenState extends State<FileScreen> {
     try {
       await _flutterTts.stop();
     } catch (e) {
-      print("Error stopping speaking: $e");
+      debugPrint("Error stopping speaking: $e");
     }
   }
 
@@ -1054,22 +1059,24 @@ class _FileScreenState extends State<FileScreen> {
     try {
       if (!_speechToText.isListening) { // Ensure recognition is not already active
         await _speechToText.listen(onResult: _onSpeechResult);
+        if (!mounted) return;
         setState(() {});
         _responseSpoken = false; // Reset the flag
       } else {
-        print("Speech recognition is already active."); // Log a message if recognition is already active
+        debugPrint("Speech recognition is already active."); // Log a message if recognition is already active
       }
     } catch (e) {
-      print("Error starting listening: $e");
+      debugPrint("Error starting listening: $e");
     }
   }
 
   Future<void> _stopListening() async {
     try {
       await _speechToText.stop();
+      if (!mounted) return;
       setState(() {});
     } catch (e) {
-      print("Error stopping listening: $e");
+      debugPrint("Error stopping listening: $e");
     }
   }
 
@@ -1091,7 +1098,7 @@ class _FileScreenState extends State<FileScreen> {
       await Future.delayed(const Duration(milliseconds: 500)); // Delay for a short period
       await _startListening(); // Restart listening
     } catch (e) {
-      print("Error stopping and restarting listening: $e");
+      debugPrint("Error stopping and restarting listening: $e");
     } finally {
       _isStoppingAndRestarting = false; // Reset flag after completion
     }
@@ -1103,7 +1110,7 @@ class TimeWidget extends StatefulWidget {
   const TimeWidget({super.key});
 
   @override
-  _TimeWidgetState createState() => _TimeWidgetState();
+  State<TimeWidget> createState() => _TimeWidgetState();
 }
 
 class _TimeWidgetState extends State<TimeWidget> {
@@ -1182,8 +1189,7 @@ class _TimeWidgetState extends State<TimeWidget> {
           const SizedBox(
             width: 10,
           ),
-          Container(
-            child: Stack(
+          Stack(
               alignment: Alignment.topCenter,
               children: [
                 Text(
@@ -1205,7 +1211,6 @@ class _TimeWidgetState extends State<TimeWidget> {
                 ),
               ],
             ),
-          ),
         ],
       ),
     );
@@ -1220,12 +1225,11 @@ class FileNameWidget extends StatefulWidget {
 
 
   @override
-  _FileNameWidgetState createState() => _FileNameWidgetState();
+  State<FileNameWidget> createState() => _FileNameWidgetState();
 }
 
 class _FileNameWidgetState extends State<FileNameWidget> {
   late FlutterTts _flutterTts;
-  late SpeechToText _speechToText;
   late String fileName;
 
   @override
@@ -1239,12 +1243,6 @@ class _FileNameWidgetState extends State<FileNameWidget> {
   void dispose() {
     _flutterTts.stop();
     super.dispose();
-  }
-
-  Future<void> _speak(String text) async {
-    if (text.isNotEmpty) {
-      await _flutterTts.speak(text);
-    }
   }
 
   @override
@@ -1351,7 +1349,7 @@ class FolderPickerDialog extends StatefulWidget {
   const FolderPickerDialog({super.key, required this.folders, required this.onPathSelected, this.userId});
 
   @override
-  _FolderPickerDialogState createState() => _FolderPickerDialogState();
+  State<FolderPickerDialog> createState() => _FolderPickerDialogState();
 }
 
 class _FolderPickerDialogState extends State<FolderPickerDialog> {

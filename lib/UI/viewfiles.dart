@@ -34,12 +34,10 @@ class ViewFiles extends StatefulWidget {
 }
 
 class _ViewFilesState extends State<ViewFiles> {
-  final CollectionReference FileSystem = FirebaseFirestore.instance.collection('FileSystem');
+  final CollectionReference fileSystem = FirebaseFirestore.instance.collection('FileSystem');
   List<Disk>? disks;
   final FlutterTts _flutterTts = FlutterTts();
-  bool _flutterTtsInitialized = false;
   final SpeechToText _speechToText = SpeechToText();
-  bool _speechEnabled = true;
   String _lastWords = '';
   String command =  '';
   bool _isStoppingAndRestarting = false;
@@ -89,11 +87,9 @@ class _ViewFilesState extends State<ViewFiles> {
                 left: 0,
                 right: 0,
                 bottom: 70,
-                child: Container(
-                  child: Image.asset(
+                child: Image.asset(
                     'assets/background/FilesBackground.png', // Replace with your image path
                   ),
-                ),
               ),
 
 
@@ -195,8 +191,8 @@ class _ViewFilesState extends State<ViewFiles> {
 
                                           Navigator.of(context).pushReplacement(
                                             MaterialPageRoute(builder: (context) => Files(
-                                              headerName: disks![i].name ?? '',
-                                              currentPath: '${disks![i].path}/${disks![i].name}'?? '',
+                                              headerName: disks![i].name,
+                                              currentPath: '${disks![i].path}/${disks![i].name}',
                                               userId: widget.userId,
                                             )),
                                           );
@@ -240,20 +236,23 @@ class _ViewFilesState extends State<ViewFiles> {
   Future<List<Disk>> _loadDisks() async {
     List<Disk> disks = [];
     try {
-      QuerySnapshot querySnapshot = await FileSystem.get();
-      // Get documents with the type of 'disk'
+      QuerySnapshot querySnapshot = await fileSystem.where('type', isEqualTo: 'disk').get();
+      if (querySnapshot.docs.isEmpty) {
+        // A fresh Firebase project has no disk yet. The security rules allow
+        // exactly this one document to be created, so the first sign-in sets it up.
+        await fileSystem.doc('disk-C').set({'name': 'C', 'path': '/FileSystem', 'type': 'disk'});
+        querySnapshot = await fileSystem.where('type', isEqualTo: 'disk').get();
+      }
       for (var doc in querySnapshot.docs) {
-        if (doc['path'] == '/FileSystem') {
-          disks.add(Disk(
+        disks.add(Disk(
           name: doc['name'],
           path: doc['path'],
         ));
-        }
       }
 
 
     } catch (e) {
-      print("Error loading disks: $e");
+      debugPrint("Error loading disks: $e");
     }
     return disks;
   }
@@ -271,13 +270,15 @@ class _ViewFilesState extends State<ViewFiles> {
     }
   }
   void _initSpeech() async {
-    _speechEnabled = await _speechToText.initialize();
+    await _speechToText.initialize();
+    if (!mounted) return;
     setState(() {
       _startListening();
     });
   }
 
   void _onSpeechResult(SpeechRecognitionResult result) {
+    if (!mounted) return; // a late result for a screen that is already gone
     String recognizedWords = result.recognizedWords.toLowerCase();
 
     if (recognizedWords.contains("honey")) {
@@ -354,24 +355,24 @@ class _ViewFilesState extends State<ViewFiles> {
     try {
       await _flutterTts.setVoice({"name": "Microsoft Aria Online (Natural) - English (United States)", "locale": "en-US"});
       await _flutterTts.setSpeechRate(1.25);
+      if (!mounted) return;
       setState(() {
-        _flutterTtsInitialized = true; // Update the initialization status
       });
       // First time only
       Timer(const Duration(milliseconds: 500), () => _speak("You are now in the view files screen."));
 
 
     } catch (e) {
-      print("Error initializing TTS: $e");
+      debugPrint("Error initializing TTS: $e");
     }
   }
 
 
-  Future<void> _speak(text) async{
+  Future<void> _speak(String text) async{
     try {
       await _flutterTts.speak(text);
     } catch (e) {
-      print("Error speaking: $e");
+      debugPrint("Error speaking: $e");
     }
   }
 
@@ -379,7 +380,7 @@ class _ViewFilesState extends State<ViewFiles> {
     try {
       await _flutterTts.stop();
     } catch (e) {
-      print("Error stopping speaking: $e");
+      debugPrint("Error stopping speaking: $e");
     }
   }
 
@@ -387,22 +388,24 @@ class _ViewFilesState extends State<ViewFiles> {
     try {
       if (!_speechToText.isListening) { // Ensure recognition is not already active
         await _speechToText.listen(onResult: _onSpeechResult);
+        if (!mounted) return;
         setState(() {});
         _responseSpoken = false; // Reset the flag
       } else {
-        print("Speech recognition is already active."); // Log a message if recognition is already active
+        debugPrint("Speech recognition is already active."); // Log a message if recognition is already active
       }
     } catch (e) {
-      print("Error starting listening: $e");
+      debugPrint("Error starting listening: $e");
     }
   }
 
   Future<void> _stopListening() async {
     try {
       await _speechToText.stop();
+      if (!mounted) return;
       setState(() {});
     } catch (e) {
-      print("Error stopping listening: $e");
+      debugPrint("Error stopping listening: $e");
     }
   }
 
@@ -424,7 +427,7 @@ class _ViewFilesState extends State<ViewFiles> {
       await Future.delayed(const Duration(milliseconds: 500)); // Delay for a short period
       await _startListening(); // Restart listening
     } catch (e) {
-      print("Error stopping and restarting listening: $e");
+      debugPrint("Error stopping and restarting listening: $e");
     } finally {
       _isStoppingAndRestarting = false; // Reset flag after completion
     }
@@ -436,7 +439,7 @@ class TimeWidget extends StatefulWidget {
   const TimeWidget({super.key});
 
   @override
-  _TimeWidgetState createState() => _TimeWidgetState();
+  State<TimeWidget> createState() => _TimeWidgetState();
 }
 
 class _TimeWidgetState extends State<TimeWidget> {
@@ -515,8 +518,7 @@ class _TimeWidgetState extends State<TimeWidget> {
           const SizedBox(
             width: 10,
           ),
-          Container(
-            child: Stack(
+          Stack(
               alignment: Alignment.topCenter,
               children: [
                 Text(
@@ -538,7 +540,6 @@ class _TimeWidgetState extends State<TimeWidget> {
                 ),
               ],
             ),
-          ),
         ],
       ),
     );

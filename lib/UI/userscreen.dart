@@ -1,32 +1,21 @@
 import 'dart:async';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:hexagon/hexagon.dart';
-import 'package:honey_os/UI/userLogin.dart';
-import 'package:honey_os/UI/userRegister.dart';
+import 'package:honey_os/UI/user_login.dart';
+import 'package:honey_os/UI/user_register.dart';
+import 'package:honey_os/core/avatar.dart';
+import 'package:honey_os/core/voice.dart';
+import 'package:honey_os/services/accounts.dart';
 import 'package:speech_to_text/speech_to_text.dart';
 import 'package:speech_to_text/speech_recognition_result.dart';
 
 class User {
   final String id;
   final String name;
-  final String password;
   final String profilePicture;
 
-  User({required this.id, required this.name, required this.password, required this.profilePicture});
-
-  factory User.fromJson(Map<String, dynamic> json) {
-    return User(
-      id: json['id'],
-      name: json['name'],
-      password: json['password'],
-      profilePicture: json['profilePicture'],
-    );
-  }
-
-
-
+  User({required this.id, required this.name, required this.profilePicture});
 }
 
 
@@ -39,11 +28,9 @@ class UserScreen extends StatefulWidget {
 
 class _UserScreenState extends State<UserScreen> {
   List<User>? usersInfo;
-  final CollectionReference users = FirebaseFirestore.instance.collection('users');
+  final Accounts _accounts = Accounts();
   final FlutterTts _flutterTts = FlutterTts();
-  bool _flutterTtsInitialized = false;
   final SpeechToText _speechToText = SpeechToText();
-  bool _speechEnabled = true;
   String _lastWords = '';
   String command =  '';
   bool _isStoppingAndRestarting = false;
@@ -56,16 +43,6 @@ class _UserScreenState extends State<UserScreen> {
 
 
   final Duration _checkInterval = const Duration(milliseconds: 10); // Adjust the interval as needed
-
-  String trimStringFromWord(String input, String word) {
-    int index = input.indexOf(word);
-    if (index != -1) {
-      return input.substring(index);
-    } else {
-      // Word not found, return the original string
-      return input;
-    }
-  }
 
   @override
   void initState() {
@@ -80,7 +57,8 @@ class _UserScreenState extends State<UserScreen> {
 
   /// This has to happen only once per app
   void _initSpeech() async {
-    _speechEnabled = await _speechToText.initialize();
+    await _speechToText.initialize();
+    if (!mounted) return;
     _startListening();
     setState(() {
 
@@ -99,6 +77,7 @@ class _UserScreenState extends State<UserScreen> {
 
 
   void _onSpeechResult(SpeechRecognitionResult result) {
+    if (!mounted) return; // a late result for a screen that is already gone
     String recognizedWords = result.recognizedWords.toLowerCase();
 
     if (recognizedWords.contains("honey")) {
@@ -122,45 +101,37 @@ class _UserScreenState extends State<UserScreen> {
     try {
       await _flutterTts.setVoice({"name": "Microsoft Aria Online (Natural) - English (United States)", "locale": "en-US"});
       await _flutterTts.setSpeechRate(1.25);
-      _flutterTtsInitialized = true;
+      if (!mounted) return;
       setState(() {});
 
     } catch (e) {
-      print("Error initializing TTS: $e");
+      debugPrint("Error initializing TTS: $e");
     }
   }
 
   void fetchUsers() async {
-    final QuerySnapshot snapshot = await users.get();
     List<User> usersInfo = [];
-    snapshot.docs.forEach((doc) async {
-      print(doc['profile_picture']);
-      usersInfo.add(User(
-        id: doc.id,
-        name: doc['name'],
-        password: doc['password'],
-        profilePicture: doc['profile_picture'],
-      ));
-    });
+    try {
+      // Nobody is signed in on the picker; the profiles are readable by design.
+      await _accounts.signOut();
+      for (final UserProfile profile in await _accounts.listUsers()) {
+        usersInfo.add(User(id: profile.id, name: profile.name, profilePicture: profile.picture));
+      }
+    } catch (e) {
+      debugPrint("Error loading users: $e");
+    }
+    if (!mounted) return;
     setState(() {
       this.usersInfo = usersInfo;
     });
   }
 
 
-  Future<void> _speak(text) async{
+  Future<void> _speak(String text) async{
     try {
       await _flutterTts.speak(text);
     } catch (e) {
-      print("Error speaking: $e");
-    }
-  }
-
-  Future<void> _interruptSpeaking() async {
-    try {
-      await _flutterTts.stop();
-    } catch (e) {
-      print("Error stopping speaking: $e");
+      debugPrint("Error speaking: $e");
     }
   }
 
@@ -168,22 +139,24 @@ class _UserScreenState extends State<UserScreen> {
     try {
       if (!_speechToText.isListening) { // Ensure recognition is not already active
         await _speechToText.listen(onResult: _onSpeechResult);
+        if (!mounted) return;
         _responseSpoken = false; // Reset the flag
         setState(() {});
       } else {
-        print("Speech recognition is already active."); // Log a message if recognition is already active
+        debugPrint("Speech recognition is already active."); // Log a message if recognition is already active
       }
     } catch (e) {
-      print("Error starting listening: $e");
+      debugPrint("Error starting listening: $e");
     }
   }
 
   Future<void> _stopListening() async {
     try {
       await _speechToText.stop();
+      if (!mounted) return;
       setState(() {});
     } catch (e) {
-      print("Error stopping listening: $e");
+      debugPrint("Error stopping listening: $e");
     }
   }
 
@@ -210,7 +183,7 @@ class _UserScreenState extends State<UserScreen> {
       await Future.delayed(const Duration(milliseconds: 500)); // Delay for a short period
       await _startListening(); // Restart listening
     } catch (e) {
-      print("Error stopping and restarting listening: $e");
+      debugPrint("Error stopping and restarting listening: $e");
     } finally {
       _isStoppingAndRestarting = false; // Reset flag after completion
     }
@@ -231,13 +204,10 @@ class _UserScreenState extends State<UserScreen> {
               children: [
                 Center(
 
-                  child: Container(
-
-                    child: Image.asset(
+                  child: Image.asset(
                       'assets/background/HomePageBackground.png', // Replace with your image path
                       fit: BoxFit.fitHeight,
                     ),
-                  ),
                 ),
                 const Center(
                   child: Column(
@@ -288,21 +258,21 @@ class _UserScreenState extends State<UserScreen> {
                 Positioned(
                   top: constraints.maxHeight * 0.478,
                   left: constraints.maxWidth * 0.37,
-                  child: usersInfo != null && usersInfo!.isNotEmpty ? UserIcon(size.width *0.127, usersInfo?[0].profilePicture ?? '', usersInfo?[0].id ?? '', usersInfo?[0].name ?? '') : UserIcon(size.width *0.127, '', '', ''),
+                  child: usersInfo != null && usersInfo!.isNotEmpty ? userIcon(size.width *0.127, usersInfo?[0].profilePicture ?? '', usersInfo?[0].id ?? '', usersInfo?[0].name ?? '') : userIcon(size.width *0.127, '', '', ''),
                 ),
 
                 //Add User 1
                 Positioned(
                   top: constraints.maxHeight * 0.37,
                   left: constraints.maxWidth * 0.29,
-                  child: usersInfo != null && usersInfo!.length > 1 ? UserIcon(size.width *0.1, usersInfo?[1].profilePicture ?? '', usersInfo?[1].id ?? '', usersInfo?[1].name ?? '') : UserIcon(size.width *0.1, '', '', '')
+                  child: usersInfo != null && usersInfo!.length > 1 ? userIcon(size.width *0.1, usersInfo?[1].profilePicture ?? '', usersInfo?[1].id ?? '', usersInfo?[1].name ?? '') : userIcon(size.width *0.1, '', '', '')
                 ),
 
                 //Add User 2
                 Positioned(
                   top: constraints.maxHeight * 0.569,
                   left: constraints.maxWidth * 0.276,
-                  child: usersInfo != null && usersInfo!.length > 2 ? UserIcon(size.width *0.07, usersInfo?[2].profilePicture ?? '', usersInfo?[2].id ?? '', usersInfo?[2].name ?? '') : UserIcon(size.width *0.07, '', '', '')
+                  child: usersInfo != null && usersInfo!.length > 2 ? userIcon(size.width *0.07, usersInfo?[2].profilePicture ?? '', usersInfo?[2].id ?? '', usersInfo?[2].name ?? '') : userIcon(size.width *0.07, '', '', '')
                 ),
 
 
@@ -310,49 +280,49 @@ class _UserScreenState extends State<UserScreen> {
                 Positioned(
                   top: constraints.maxHeight * 0.236,
                   left: constraints.maxWidth * 0.375,
-                  child: usersInfo != null && usersInfo!.length > 3 ? UserIcon(size.width *0.12, usersInfo?[3].profilePicture ?? '', usersInfo?[3].id ?? '', usersInfo?[3].name ?? '') : UserIcon(size.width *0.12, '', '', '')
+                  child: usersInfo != null && usersInfo!.length > 3 ? userIcon(size.width *0.12, usersInfo?[3].profilePicture ?? '', usersInfo?[3].id ?? '', usersInfo?[3].name ?? '') : userIcon(size.width *0.12, '', '', '')
                 ),
 
                 //Add User 4
                 Positioned(
                   top: constraints.maxHeight * 0.73,
                   left: constraints.maxWidth * 0.3998,
-                  child: usersInfo != null && usersInfo!.length > 4 ? UserIcon(size.width *0.088, usersInfo?[4].profilePicture ?? '', usersInfo?[4].id ?? '', usersInfo?[4].name ?? '') : UserIcon(size.width *0.088, '', '', '')
+                  child: usersInfo != null && usersInfo!.length > 4 ? userIcon(size.width *0.088, usersInfo?[4].profilePicture ?? '', usersInfo?[4].id ?? '', usersInfo?[4].name ?? '') : userIcon(size.width *0.088, '', '', '')
                 ),
 
                 //Add User 5
                 Positioned(
                   top: constraints.maxHeight * 0.347,
                   left: constraints.maxWidth * 0.479,
-                  child: usersInfo != null && usersInfo!.length > 5 ? UserIcon(size.width *0.1275, usersInfo?[5].profilePicture ?? '', usersInfo?[5].id ?? '', usersInfo?[5].name ?? '') : UserIcon(size.width *0.1275, '', '', '')
+                  child: usersInfo != null && usersInfo!.length > 5 ? userIcon(size.width *0.1275, usersInfo?[5].profilePicture ?? '', usersInfo?[5].id ?? '', usersInfo?[5].name ?? '') : userIcon(size.width *0.1275, '', '', '')
                 ),
 
                 //Add User 6
                 Positioned(
                   top: constraints.maxHeight * 0.605,
                   left: constraints.maxWidth * 0.48,
-                  child: usersInfo != null && usersInfo!.length > 6 ? UserIcon(size.width *0.128, usersInfo?[6].profilePicture ?? '', usersInfo?[6].id ?? '', usersInfo?[6].name ?? '') : UserIcon(size.width *0.128, '', '', '')
+                  child: usersInfo != null && usersInfo!.length > 6 ? userIcon(size.width *0.128, usersInfo?[6].profilePicture ?? '', usersInfo?[6].id ?? '', usersInfo?[6].name ?? '') : userIcon(size.width *0.128, '', '', '')
                 ),
 
                 //Add User 7
                 Positioned(
                   top: constraints.maxHeight * 0.2774,
                   left: constraints.maxWidth * 0.5974,
-                  child: usersInfo != null && usersInfo!.length > 7 ? UserIcon(size.width *0.0948, usersInfo?[7].profilePicture ?? '', usersInfo?[7].id ?? '', usersInfo?[7].name ?? '') : UserIcon(size.width *0.0948, '', '', '')
+                  child: usersInfo != null && usersInfo!.length > 7 ? userIcon(size.width *0.0948, usersInfo?[7].profilePicture ?? '', usersInfo?[7].id ?? '', usersInfo?[7].name ?? '') : userIcon(size.width *0.0948, '', '', '')
                 ),
 
                 //Add User 8
                 Positioned(
                   top: constraints.maxHeight * 0.474,
                   left: constraints.maxWidth * 0.589,
-                  child: usersInfo != null && usersInfo!.length > 8 ? UserIcon(size.width *0.13, usersInfo?[8].profilePicture ?? '', usersInfo?[8].id ?? '', usersInfo?[8].name ?? '') : UserIcon(size.width *0.13, '', '', '')
+                  child: usersInfo != null && usersInfo!.length > 8 ? userIcon(size.width *0.13, usersInfo?[8].profilePicture ?? '', usersInfo?[8].id ?? '', usersInfo?[8].name ?? '') : userIcon(size.width *0.13, '', '', '')
                 ),
 
                 //Add User 9
                 Positioned(
                   top: constraints.maxHeight * 0.73,
                   left: constraints.maxWidth * 0.599,
-                  child: usersInfo != null && usersInfo!.length > 9 ? UserIcon(size.width *0.08, usersInfo?[9].profilePicture ?? '', usersInfo?[9].id ?? '', usersInfo?[9].name ?? '') : UserIcon(size.width *0.08, '', '', '')
+                  child: usersInfo != null && usersInfo!.length > 9 ? userIcon(size.width *0.08, usersInfo?[9].profilePicture ?? '', usersInfo?[9].id ?? '', usersInfo?[9].name ?? '') : userIcon(size.width *0.08, '', '', '')
                 ),
 
               ]
@@ -364,7 +334,7 @@ class _UserScreenState extends State<UserScreen> {
   }
 
 
-  Widget UserIcon (double size, String image, String id, String userName){
+  Widget userIcon (double size, String image, String id, String userName){
     return Padding(
       padding: const EdgeInsets.all(8.0),
       child: HexagonWidget.flat(
@@ -375,7 +345,7 @@ class _UserScreenState extends State<UserScreen> {
         child: image == '' 
         ? IconButton(
             icon: const Icon(Icons.add_circle_outline),
-            onPressed: () => Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const userRegister())),
+            onPressed: () => Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const UserRegister())),
             color: Colors.white, // Set the icon color
             iconSize: 50, // Set the icon size
           )
@@ -385,9 +355,9 @@ class _UserScreenState extends State<UserScreen> {
             decoration: const BoxDecoration(color: Colors.white),
             child: InkWell(
               onTap: (){
-                Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => userLogin(userName: userName, userId: id, profileImage: image)));
+                Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => UserLogin(userName: userName, userId: id, profileImage: image)));
               },
-              child: Image.network(image, fit: BoxFit.cover),
+              child: Image.memory(decodeAvatar(image), fit: BoxFit.cover, gaplessPlayback: true),
             ),
           ),
         ),

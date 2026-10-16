@@ -71,14 +71,12 @@ class Files extends StatefulWidget {
 
 class _FilesState extends State<Files> {
   late String _headerName;
-  final CollectionReference FileSystem = FirebaseFirestore.instance.collection('FileSystem');
+  final CollectionReference fileSystem = FirebaseFirestore.instance.collection('FileSystem');
   List<File>? files;
   List<Folder>? folders;
   late String _fileName;
   final FlutterTts _flutterTts = FlutterTts();
-  bool _flutterTtsInitialized = false;
   final SpeechToText _speechToText = SpeechToText();
-  bool _speechEnabled = true;
   String _lastWords = '';
   String command =  '';
   bool _isStoppingAndRestarting = false;
@@ -129,11 +127,9 @@ class _FilesState extends State<Files> {
                 left: 0,
                 right: 0,
                 bottom: 70,
-                child: Container(
-                  child: Image.asset(
+                child: Image.asset(
                     'assets/background/FilesBackground.png', // Replace with your image path
                   ),
-                ),
               ),
 
 
@@ -188,14 +184,14 @@ class _FilesState extends State<Files> {
                     onPressed: () {
 
                       int count = widget.currentPath!.split('/').length - 1;
-                      print(count);
+                      debugPrint('$count');
                       if (count > 2) {
                         // Remove the last component of the path
                         List<String> pathComponents = widget.currentPath!.split('/');
-                        print (pathComponents);
+                        debugPrint(pathComponents.toString());
                         pathComponents.removeLast();
                         String newPath = pathComponents.join('/');
-                        print(newPath);
+                        debugPrint(newPath);
                         Navigator.of(context).pushReplacement(
                           MaterialPageRoute(builder: (context) => Files(
                             headerName: pathComponents[count - 1],
@@ -289,11 +285,12 @@ class _FilesState extends State<Files> {
                                                 title: const Text('Delete'),
                                                 onTap: () async {
                                                   try {
-                                                    await FileSystem.doc(folders?[rowIndex * 9 + i].id).delete();
+                                                    await fileSystem.doc(folders?[rowIndex * 9 + i].id).delete();
                                                     _loadFoldersAndFiles();
+                                                    if (!context.mounted) return;
                                                     Navigator.of(context).pop();
                                                   } catch (e) {
-                                                    print('Error deleting folder: $e');
+                                                    debugPrint('Error deleting folder: $e');
                                                   }
                                                 },
                                               ),
@@ -334,7 +331,7 @@ class _FilesState extends State<Files> {
 
                                                                 while (nameExists) {
                                                                   // Query Firestore for a folder with the same name and path
-                                                                  var querySnapshot = await FileSystem
+                                                                  var querySnapshot = await fileSystem
                                                                       .where('name', isEqualTo: _fileName)
                                                                       .where('path', isEqualTo: widget.currentPath)
                                                                       .where('type', isEqualTo: 'folder')
@@ -352,13 +349,14 @@ class _FilesState extends State<Files> {
                                                                   }
                                                                 }
 
-                                                                await FileSystem.doc(folders?[rowIndex * 9 + i].id).update({'name': _fileName});
+                                                                await fileSystem.doc(folders?[rowIndex * 9 + i].id).update({'name': _fileName});
                                                                 _loadFoldersAndFiles();
+                                                                if (!context.mounted) return;
                                                                 while (Navigator.canPop(context)) {
                                                                   Navigator.pop(context);
                                                                 }
                                                               } catch (e) {
-                                                                print('Error renaming folder: $e');
+                                                                debugPrint('Error renaming folder: $e');
                                                               }
                                                             },
                                                             child: const Text('Submit'),
@@ -427,12 +425,13 @@ class _FilesState extends State<Files> {
                                       onTap: () async {
                                         try {
 
-                                          await FileSystem.doc(files![rowIndex * 9 + i - folders!.length].id).delete();
+                                          await fileSystem.doc(files![rowIndex * 9 + i - folders!.length].id).delete();
                                           _loadFoldersAndFiles();
+                                          if (!context.mounted) return;
                                           Navigator.of(context).pop();
 
                                         } catch (e) {
-                                          print('Error deleting file: $e');
+                                          debugPrint('Error deleting file: $e');
                                         }
                                       },
                                     ),
@@ -473,7 +472,7 @@ class _FilesState extends State<Files> {
 
                                                       while (nameExists) {
                                                         // Query Firestore for a folder with the same name and path
-                                                        var querySnapshot = await FileSystem
+                                                        var querySnapshot = await fileSystem
                                                             .where('name', isEqualTo: _fileName)
                                                             .where('path', isEqualTo: widget.currentPath)
                                                             .where('type', isEqualTo: 'file')
@@ -491,13 +490,14 @@ class _FilesState extends State<Files> {
                                                         }
                                                       }
 
-                                                      await FileSystem.doc(files![rowIndex * 9 + i - folders!.length].id).update({'name': _fileName});
+                                                      await fileSystem.doc(files![rowIndex * 9 + i - folders!.length].id).update({'name': _fileName});
                                                       _loadFoldersAndFiles();
+                                                      if (!context.mounted) return;
                                                       while (Navigator.canPop(context)) {
                                                         Navigator.pop(context);
                                                       }
                                                     } catch (e) {
-                                                      print('Error renaming file: $e');
+                                                      debugPrint('Error renaming file: $e');
                                                     }
                                                   },
                                                   child: const Text('Submit'),
@@ -547,7 +547,7 @@ class _FilesState extends State<Files> {
                                                 fileContent: fileContent,
                                                 saveLocation: widget.currentPath!,
                                                 fileId: files![rowIndex * 9 + i - folders!.length].id,
-                                                userId: widget.userId!,
+                                                userId: widget.userId,
                                               );
                                             },
                                           ).then((value) => fileOpened = false);
@@ -628,7 +628,7 @@ class _FilesState extends State<Files> {
 
                                     while (nameExists) {
                                       // Query Firestore for a folder with the same name and path
-                                      var querySnapshot = await FileSystem
+                                      var querySnapshot = await fileSystem
                                           .where('name', isEqualTo: _fileName)
                                           .where('path', isEqualTo: widget.currentPath)
                                           .where('type', isEqualTo: 'folder')
@@ -647,12 +647,13 @@ class _FilesState extends State<Files> {
                                     }
 
                                     // Add the new folder with the unique name
-                                    await FileSystem.add({'name': _fileName, 'path': widget.currentPath, 'type': 'folder', 'userId': widget.userId});
+                                    await fileSystem.add({'name': _fileName, 'path': widget.currentPath, 'type': 'folder', 'userId': widget.userId});
                                     _loadFoldersAndFiles();
+                                    if (!context.mounted) return;
                                     Navigator.of(context).pop();
                                     _speak("The folder $_fileName has been created, honey.");
                                   } catch (e) {
-                                    print('Error adding folder: $e');
+                                    debugPrint('Error adding folder: $e');
                                   }
                                 },
                                 child: const Text('Add'),
@@ -699,7 +700,10 @@ class _FilesState extends State<Files> {
     List<File> files = [];
     List<Folder> folders = [];
     try {
-      QuerySnapshot querySnapshot = await FileSystem.where('path', isEqualTo: widget.currentPath).get();
+      QuerySnapshot querySnapshot = await fileSystem
+          .where('path', isEqualTo: widget.currentPath)
+          .where('userId', isEqualTo: widget.userId)
+          .get();
       for (var doc in querySnapshot.docs) {
         if (doc['type'] == 'folder' && doc['userId'] == widget.userId) {
           folders.add(Folder(id: doc.id, name: doc['name'], path: doc['path'], userId: doc['userId']));
@@ -716,7 +720,7 @@ class _FilesState extends State<Files> {
 
 
     } catch (e) {
-      print("Error loading files and folders: $e");
+      debugPrint("Error loading files and folders: $e");
     }
   }
 
@@ -732,13 +736,15 @@ class _FilesState extends State<Files> {
     }
   }
   void _initSpeech() async {
-    _speechEnabled = await _speechToText.initialize();
+    await _speechToText.initialize();
+    if (!mounted) return;
     setState(() {
       _startListening();
     });
   }
 
   void _onSpeechResult(SpeechRecognitionResult result) {
+    if (!mounted) return; // a late result for a screen that is already gone
     String recognizedWords = result.recognizedWords.toLowerCase();
 
     if (recognizedWords.contains("honey")) {
@@ -797,7 +803,7 @@ class _FilesState extends State<Files> {
                       fileContent: file.content,
                       saveLocation: widget.currentPath!,
                       fileId: file.id,
-                      userId: widget.userId!,
+                      userId: widget.userId,
                     );
                   },
                 ).then((value) => fileOpened = false);
@@ -806,7 +812,7 @@ class _FilesState extends State<Files> {
               _speak("The file $fileName does not exist, honey.");
             }
           } catch (e) {
-            print('Error opening file: $e');
+            debugPrint('Error opening file: $e');
           }
         }
       } else if (command.contains("open the folder")) {
@@ -833,7 +839,7 @@ class _FilesState extends State<Files> {
               _speak("The folder $folderName does not exist, honey.");
             }
           } catch (e) {
-            print('Error opening folder: $e');
+            debugPrint('Error opening folder: $e');
           }
         });
 
@@ -874,7 +880,7 @@ class _FilesState extends State<Files> {
 
             while (nameExists) {
               // Query Firestore for a folder with the same name and path
-              var querySnapshot = await FileSystem
+              var querySnapshot = await fileSystem
                   .where('name', isEqualTo: fileName)
                   .where('path', isEqualTo: widget.currentPath)
                   .where('type', isEqualTo: 'folder')
@@ -896,10 +902,10 @@ class _FilesState extends State<Files> {
             
 
             // Add the new folder with the unique name
-            await FileSystem.add({'name': fileName, 'path': widget.currentPath, 'type': 'folder', 'userId': widget.userId});
+            await fileSystem.add({'name': fileName, 'path': widget.currentPath, 'type': 'folder', 'userId': widget.userId});
             _loadFoldersAndFiles();
           } catch (e) {
-            print('Error adding folder: $e');
+            debugPrint('Error adding folder: $e');
           }
           
         }
@@ -915,7 +921,7 @@ class _FilesState extends State<Files> {
       
           File? file = files!.firstWhere((element) => element.name.toLowerCase() == fileName.toLowerCase(), orElse: () => File(id: '', name: '', path: '', content: '', userId: ''));
           if (file.name != '' && file.content != '' && file.path != '') {
-            await FileSystem.doc(file.id).delete();
+            await fileSystem.doc(file.id).delete();
             _loadFoldersAndFiles();
             _speak("The file $fileName has been deleted, honey.");
           } else {
@@ -924,7 +930,7 @@ class _FilesState extends State<Files> {
 
           
         } catch (e) {
-          print('Error deleting file: $e');
+          debugPrint('Error deleting file: $e');
         }
       }
 
@@ -939,14 +945,14 @@ class _FilesState extends State<Files> {
    
           Folder? folder = folders!.firstWhere((element) => element.name.toLowerCase() == fileName.toLowerCase(), orElse: () => Folder(id: '', name: '', path: '', userId: ''));
           if (folder.name != '' && folder.path != '') {
-            await FileSystem.doc(folder.id).delete();
+            await fileSystem.doc(folder.id).delete();
             _loadFoldersAndFiles();
             _speak("The folder $fileName has been deleted, honey.");
           } else {
             _speak("The folder $fileName does not exist, honey.");
           }
         } catch (e) {
-          print('Error deleting folder: $e');
+          debugPrint('Error deleting folder: $e');
         }
       }
         
@@ -969,7 +975,7 @@ class _FilesState extends State<Files> {
 
               while (nameExists) {
                 // Query Firestore for a folder with the same name and path
-                var querySnapshot = await FileSystem
+                var querySnapshot = await fileSystem
                     .where('name', isEqualTo: newFileName)
                     .where('path', isEqualTo: widget.currentPath)
                     .where('type', isEqualTo: 'file')
@@ -987,13 +993,13 @@ class _FilesState extends State<Files> {
                 }
               }
 
-              await FileSystem.doc(existingFileId).update({'name': newFileName});
+              await fileSystem.doc(existingFileId).update({'name': newFileName});
               _loadFoldersAndFiles();
             } else {
               _speak("The file $existingFileName does not exist, honey.");
             }
           }catch (e) {
-              print('Error renaming file: $e');
+              debugPrint('Error renaming file: $e');
             }
             
           }
@@ -1018,7 +1024,7 @@ class _FilesState extends State<Files> {
 
               while (nameExists) {
                 // Query Firestore for a folder with the same name and path
-                var querySnapshot = await FileSystem
+                var querySnapshot = await fileSystem
                     .where('name', isEqualTo: newFolderName)
                     .where('path', isEqualTo: widget.currentPath)
                     .where('type', isEqualTo: 'folder')
@@ -1036,13 +1042,13 @@ class _FilesState extends State<Files> {
                 }
               }
 
-              await FileSystem.doc(existingFolderId).update({'name': newFolderName});
+              await fileSystem.doc(existingFolderId).update({'name': newFolderName});
               _loadFoldersAndFiles();
             } else {
               _speak("The folder $existingFolderName does not exist, honey.");
             }
           }catch (e) {
-            print('Error renaming folder: $e');
+            debugPrint('Error renaming folder: $e');
           }
         }
         
@@ -1067,7 +1073,7 @@ class _FilesState extends State<Files> {
                     fileContent: file.content,
                     saveLocation: widget.currentPath!,
                     fileId: file.id,
-                    userId: widget.userId!,
+                    userId: widget.userId,
                   );
                 },
               ).then((value) => fileOpened = false);
@@ -1077,7 +1083,7 @@ class _FilesState extends State<Files> {
             _speak("The file $fileName does not exist, honey.");
           }
         } catch (e) {
-          print('Error reading file: $e');
+          debugPrint('Error reading file: $e');
         }
       }
 
@@ -1141,24 +1147,24 @@ class _FilesState extends State<Files> {
     try {
       await _flutterTts.setVoice({"name": "Microsoft Aria Online (Natural) - English (United States)", "locale": "en-US"});
       await _flutterTts.setSpeechRate(1.25);
+      if (!mounted) return;
       setState(() {
-        _flutterTtsInitialized = true; // Update the initialization status
       });
       // First time only
       Timer(const Duration(milliseconds: 500), () => _speak("You are now inside $_headerName"));
 
 
     } catch (e) {
-      print("Error initializing TTS: $e");
+      debugPrint("Error initializing TTS: $e");
     }
   }
 
 
-  Future<void> _speak(text) async{
+  Future<void> _speak(String text) async{
     try {
       await _flutterTts.speak(text);
     } catch (e) {
-      print("Error speaking: $e");
+      debugPrint("Error speaking: $e");
     }
   }
 
@@ -1166,7 +1172,7 @@ class _FilesState extends State<Files> {
     try {
       await _flutterTts.stop();
     } catch (e) {
-      print("Error stopping speaking: $e");
+      debugPrint("Error stopping speaking: $e");
     }
   }
 
@@ -1174,22 +1180,24 @@ class _FilesState extends State<Files> {
     try {
       if (!_speechToText.isListening) { // Ensure recognition is not already active
         await _speechToText.listen(onResult: _onSpeechResult);
+        if (!mounted) return;
         setState(() {});
         _responseSpoken = false; // Reset the flag
       } else {
-        print("Speech recognition is already active."); // Log a message if recognition is already active
+        debugPrint("Speech recognition is already active."); // Log a message if recognition is already active
       }
     } catch (e) {
-      print("Error starting listening: $e");
+      debugPrint("Error starting listening: $e");
     }
   }
 
   Future<void> _stopListening() async {
     try {
       await _speechToText.stop();
+      if (!mounted) return;
       setState(() {});
     } catch (e) {
-      print("Error stopping listening: $e");
+      debugPrint("Error stopping listening: $e");
     }
   }
 
@@ -1211,7 +1219,7 @@ class _FilesState extends State<Files> {
       await Future.delayed(const Duration(milliseconds: 500)); // Delay for a short period
       await _startListening(); // Restart listening
     } catch (e) {
-      print("Error stopping and restarting listening: $e");
+      debugPrint("Error stopping and restarting listening: $e");
     } finally {
       _isStoppingAndRestarting = false; // Reset flag after completion
     }
@@ -1223,7 +1231,7 @@ class TimeWidget extends StatefulWidget {
   const TimeWidget({super.key});
 
   @override
-  _TimeWidgetState createState() => _TimeWidgetState();
+  State<TimeWidget> createState() => _TimeWidgetState();
 }
 
 class _TimeWidgetState extends State<TimeWidget> {
@@ -1302,8 +1310,7 @@ class _TimeWidgetState extends State<TimeWidget> {
           const SizedBox(
             width: 10,
           ),
-          Container(
-            child: Stack(
+          Stack(
               alignment: Alignment.topCenter,
               children: [
                 Text(
@@ -1325,7 +1332,6 @@ class _TimeWidgetState extends State<TimeWidget> {
                 ),
               ],
             ),
-          ),
         ],
       ),
     );
@@ -1342,7 +1348,7 @@ class OpenedFile extends StatefulWidget {
   final String userId;
 
   @override
-  _OpenedFileState createState() => _OpenedFileState();
+  State<OpenedFile> createState() => _OpenedFileState();
 }
 
 class _OpenedFileState extends State<OpenedFile> {
@@ -1473,7 +1479,7 @@ class _OpenedFileState extends State<OpenedFile> {
                     padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: Colors.white.withOpacity(0.5),
+                      color: Colors.white.withValues(alpha: 0.5),
                     ),
                     child: IconButton(
                       icon: const Icon(

@@ -4,49 +4,38 @@ import 'package:flutter/services.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:hexagon/hexagon.dart';
 import 'package:honey_os/UI/userscreen.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:speech_to_text/speech_to_text.dart';
 import 'package:speech_to_text/speech_recognition_result.dart';
 import 'package:honey_os/UI/homescreen.dart';
+import 'package:honey_os/core/avatar.dart';
+import 'package:honey_os/core/voice.dart';
+import 'package:honey_os/services/accounts.dart';
 
-class userLogin extends StatefulWidget {
-  const userLogin({super.key, this.userName, required this.userId, this.profileImage});
+class UserLogin extends StatefulWidget {
+  const UserLogin({super.key, this.userName, required this.userId, this.profileImage});
   final String? userName;
   final String userId;
   final String? profileImage;
   @override
-  State<userLogin> createState() => _userLoginState();
+  State<UserLogin> createState() => _UserLoginState();
 }
 
-class _userLoginState extends State<userLogin> {
+class _UserLoginState extends State<UserLogin> {
   final TextEditingController _passController = TextEditingController();
   String _password = '';
-  final CollectionReference users = FirebaseFirestore.instance.collection('users');
+  final Accounts _accounts = Accounts();
   final FlutterTts _flutterTts = FlutterTts();
-  bool _flutterTtsInitialized = false;
   final SpeechToText _speechToText = SpeechToText();
-  bool _speechEnabled = true;
   String _lastWords = '';
   String command =  '';
   bool _isStoppingAndRestarting = false;
   bool _responseSpoken = false; // Add this variable
   bool stopRepeated = false;
   late Timer _speechCheckTimer;
-  String fetchedPassword = '';
   bool loadedState = false;
 
 
   final Duration _checkInterval = const Duration(milliseconds: 10); // Adjust the interval as needed
-
-  String trimStringFromWord(String input, String word) {
-    int index = input.indexOf(word);
-    if (index != -1) {
-      return input.substring(index);
-    } else {
-      // Word not found, return the original string
-      return input;
-    }
-  }
 
   @override
   void initState() {
@@ -55,31 +44,44 @@ class _userLoginState extends State<userLogin> {
     _startSpeechCheckTimer(); // Start the timer when the screen is initialized
     super.initState();
     _responseSpoken = false;
-    fetchPassword();
     Timer(const Duration(milliseconds: 500), () =>
     _speak("Hello, ${widget.userName}. Tell me your secret."));
   }
 
-  void fetchPassword() async {
-    // Get the user document with the document id
-
-    final DocumentSnapshot userSnapshot = await users.doc(widget.userId).get();
-
-    // Check if any documents were returned
-    if (userSnapshot.exists) {
-      // If a document was found, get the password
-      fetchedPassword = userSnapshot.get('password');
-    } else {
-      // If no document was found, handle the error (e.g., set password to null, show an error message, etc.)
-      fetchedPassword = '';
-      print('No user found with the username ${widget.userName}');
-
+  /// Signs in through Firebase Authentication. Returns true and opens the home
+  /// screen on success; on a wrong password it shows the error dialog.
+  Future<void> _attemptLogin(String password) async {
+    try {
+      final String uid = await _accounts.signIn(username: widget.userName ?? '', password: password);
+      if (!mounted) return;
+      Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (context) => Homescreen(firstTime: true, name: widget.userName, userId: uid)));
+    } on AccountException catch (e) {
+      if (!mounted) return;
+      showDialog(
+        context: context,
+        builder: (BuildContext context) {
+          return AlertDialog(
+            title: const Text('Error'),
+            content: Text(e.message),
+            actions: <Widget>[
+              TextButton(
+                child: const Text('OK'),
+                onPressed: () {
+                  Navigator.of(context).pop();
+                },
+              ),
+            ],
+          );
+        },
+      );
+      _speak("I'm sorry, that's not the correct password.");
     }
   }
 
   /// This has to happen only once per app
   void _initSpeech() async {
-    _speechEnabled = await _speechToText.initialize();
+    await _speechToText.initialize();
+    if (!mounted) return;
     _startListening();
     setState(() {
 
@@ -98,6 +100,7 @@ class _userLoginState extends State<userLogin> {
 
 
   void _onSpeechResult(SpeechRecognitionResult result) {
+    if (!mounted) return; // a late result for a screen that is already gone
     String recognizedWords = result.recognizedWords.toLowerCase();
 
     if (recognizedWords.contains("honey")) {
@@ -122,20 +125,20 @@ class _userLoginState extends State<userLogin> {
     try {
       await _flutterTts.setVoice({"name": "Microsoft Aria Online (Natural) - English (United States)", "locale": "en-US"});
       await _flutterTts.setSpeechRate(1.25);
-      _flutterTtsInitialized = true;
+      if (!mounted) return;
       setState(() {});
 
     } catch (e) {
-      print("Error initializing TTS: $e");
+      debugPrint("Error initializing TTS: $e");
     }
   }
 
 
-  Future<void> _speak(text) async{
+  Future<void> _speak(String text) async{
     try {
       await _flutterTts.speak(text);
     } catch (e) {
-      print("Error speaking: $e");
+      debugPrint("Error speaking: $e");
     }
   }
 
@@ -143,7 +146,7 @@ class _userLoginState extends State<userLogin> {
     try {
       await _flutterTts.stop();
     } catch (e) {
-      print("Error stopping speaking: $e");
+      debugPrint("Error stopping speaking: $e");
     }
   }
 
@@ -151,22 +154,24 @@ class _userLoginState extends State<userLogin> {
     try {
       if (!_speechToText.isListening) { // Ensure recognition is not already active
         await _speechToText.listen(onResult: _onSpeechResult);
+        if (!mounted) return;
         _responseSpoken = false; // Reset the flag
         setState(() {});
       } else {
-        print("Speech recognition is already active."); // Log a message if recognition is already active
+        debugPrint("Speech recognition is already active."); // Log a message if recognition is already active
       }
     } catch (e) {
-      print("Error starting listening: $e");
+      debugPrint("Error starting listening: $e");
     }
   }
 
   Future<void> _stopListening() async {
     try {
       await _speechToText.stop();
+      if (!mounted) return;
       setState(() {});
     } catch (e) {
-      print("Error stopping listening: $e");
+      debugPrint("Error stopping listening: $e");
     }
   }
 
@@ -193,7 +198,7 @@ class _userLoginState extends State<userLogin> {
       await Future.delayed(const Duration(milliseconds: 500)); // Delay for a short period
       await _startListening(); // Restart listening
     } catch (e) {
-      print("Error stopping and restarting listening: $e");
+      debugPrint("Error stopping and restarting listening: $e");
     } finally {
       _isStoppingAndRestarting = false; // Reset flag after completion
     }
@@ -204,31 +209,8 @@ class _userLoginState extends State<userLogin> {
     Timer(const Duration(milliseconds: 500), () async {
       if (command.contains("password is")) {
 
-        String password = command.substring(command.indexOf("password is") + 12, command.indexOf(" please"));
-        password = password.replaceAll(" ", "");
-        if (password == fetchedPassword) {
-          Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (context) => Homescreen(firstTime: true, name: widget.userName, userId: widget.userId)));
-        } else {
-          print("The password is $fetchedPassword but you said $password");
-          showDialog(
-            context: context,
-            builder: (BuildContext context) {
-              return AlertDialog(
-                title: Text('Error'),
-                content: Text("Wrong Password."),
-                actions: <Widget>[
-                  TextButton(
-                    child: Text('OK'),
-                    onPressed: () {
-                      Navigator.of(context).pop();
-                    },
-                  ),
-                ],
-              );
-            },
-          );
-          _speak("I'm sorry, that's not the correct password.");
-        }
+        final String password = (valueAfter(command, "password is") ?? '').replaceAll(" ", "");
+        await _attemptLogin(password);
       } else if (command.contains("stop")) {
         _speak("Stopping, honey.");
 
@@ -243,7 +225,7 @@ class _userLoginState extends State<userLogin> {
   Widget build(BuildContext context) {
     Size size = MediaQuery.of(context).size;
 
-    if (!_speechToText.isListening && loadedState == false || fetchedPassword == '') {
+    if (!_speechToText.isListening && loadedState == false) {
       return Scaffold(
         backgroundColor: const Color.fromARGB(255, 237, 140, 0),
         body: Center(
@@ -251,13 +233,10 @@ class _userLoginState extends State<userLogin> {
               children: [
                 Center(
 
-                  child: Container(
-
-                    child: Image.asset(
+                  child: Image.asset(
                       'assets/background/HomePageBackground.png', // Replace with your image path
                       fit: BoxFit.fitHeight,
                     ),
-                  ),
                 ),
                 const Center(
                   child: Column(
@@ -368,9 +347,10 @@ class _userLoginState extends State<userLogin> {
                                     child: AspectRatio(
                                       aspectRatio: HexagonType.FLAT.ratio,
                                       child:
-                                        Image.network(
-                                            widget.profileImage!,
-                                            fit: BoxFit.fitHeight
+                                        Image.memory(
+                                            decodeAvatar(widget.profileImage ?? ''),
+                                            fit: BoxFit.fitHeight,
+                                            gaplessPlayback: true,
                                         ),
 
                                             //color: Color.fromARGB(255, 255, 177, 0),
@@ -429,30 +409,7 @@ class _userLoginState extends State<userLogin> {
                               inputFormatters: [
                                 FilteringTextInputFormatter.deny(RegExp(r"\s")),
                               ],
-                              onSubmitted: (value) {
-                                if (_password == fetchedPassword) {
-                                  Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (context) =>  Homescreen(firstTime: true, name: widget.userName, userId: widget.userId)));
-                                } else {
-                                  showDialog(
-                                    context: context,
-                                    builder: (BuildContext context) {
-                                      return AlertDialog(
-                                        title: Text('Error'),
-                                        content: Text("Wrong Password."),
-                                        actions: <Widget>[
-                                          TextButton(
-                                            child: Text('OK'),
-                                            onPressed: () {
-                                              Navigator.of(context).pop();
-                                            },
-                                          ),
-                                        ],
-                                      );
-                                    },
-                                  );
-                                  _speak("I'm sorry, that's not the correct password.");
-                                }
-                              },
+                              onSubmitted: (value) => _attemptLogin(_password),
                             ),
                           ),
 

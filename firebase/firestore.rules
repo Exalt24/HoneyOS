@@ -1,0 +1,77 @@
+// HoneyOS security rules. The same file is used by the local emulator and
+// deployed to the hosted project (`firebase deploy --only firestore:rules`).
+//
+// The model: every person is a Firebase Authentication user, and their uid is
+// the id of their profile document and the userId stamped on everything they
+// create. Nothing is open to the world except the profile list, which the
+// hexagon user picker has to show before anyone has signed in.
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function ownsUser(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    // users/{uid}: name and a small base64 picture. No password lives here, that
+    // is Firebase Authentication's job.
+    match /users/{uid} {
+      allow read: if true;
+      allow create: if ownsUser(uid)
+        && request.resource.data.keys().hasOnly(['name', 'profile_picture'])
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && request.resource.data.name.size() <= 10
+        && request.resource.data.profile_picture is string
+        && request.resource.data.profile_picture.size() <= 150000;
+      allow update: if false;
+      allow delete: if ownsUser(uid);
+    }
+
+    // FileSystem/{id}: the shared disk, plus each person's folders and files.
+    match /FileSystem/{id} {
+
+      function isDisk(data) {
+        return data.type == 'disk';
+      }
+
+      function validItem(data) {
+        return data.userId == request.auth.uid
+          && data.type in ['file', 'folder']
+          && data.name is string && data.name.size() > 0 && data.name.size() <= 40
+          && data.path is string && data.path.size() <= 500
+          && (data.type == 'folder'
+              ? data.keys().hasOnly(['name', 'path', 'type', 'userId'])
+              : data.keys().hasOnly(['name', 'path', 'type', 'userId', 'content'])
+                && data.content is string && data.content.size() <= 200000);
+      }
+
+      // Everyone signed in sees the disk; only the owner sees an item.
+      allow read: if signedIn()
+        && (isDisk(resource.data) || resource.data.userId == request.auth.uid);
+
+      // The one disk document may be created once, with exactly this content,
+      // so a brand new project sets itself up. Items must belong to the creator.
+      allow create: if signedIn()
+        && ((id == 'disk-C'
+              && request.resource.data == {'name': 'C', 'path': '/FileSystem', 'type': 'disk'})
+            || validItem(request.resource.data));
+
+      // Owners may rename, edit and delete their items, never reassign them.
+      allow update: if signedIn()
+        && resource.data.userId == request.auth.uid
+        && validItem(request.resource.data)
+        && request.resource.data.type == resource.data.type;
+      allow delete: if signedIn() && resource.data.userId == request.auth.uid;
+    }
+
+    // Anything else is closed.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

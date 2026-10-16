@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'dart:js' as js;
+import 'package:honey_os/core/close_tab.dart';
 import 'dart:typed_data';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -24,9 +24,7 @@ class Homescreen extends StatefulWidget {
 
 class _HomescreenState extends State<Homescreen> {
   final FlutterTts _flutterTts = FlutterTts();
-  bool _flutterTtsInitialized = false;
   final SpeechToText _speechToText = SpeechToText();
-  bool _speechEnabled = true;
   String _lastWords = '';
   String command =  '';
   bool _isStoppingAndRestarting = false;
@@ -76,7 +74,8 @@ class _HomescreenState extends State<Homescreen> {
 
   /// This has to happen only once per app
   void _initSpeech() async {
-    _speechEnabled = await _speechToText.initialize();
+    await _speechToText.initialize();
+    if (!mounted) return;
     _startListening();
     setState(() {
 
@@ -95,6 +94,7 @@ class _HomescreenState extends State<Homescreen> {
 
 
   void _onSpeechResult(SpeechRecognitionResult result) {
+    if (!mounted) return; // a late result for a screen that is already gone
     String recognizedWords = result.recognizedWords.toLowerCase();
 
     if (recognizedWords.contains("honey")) {
@@ -190,15 +190,15 @@ class _HomescreenState extends State<Homescreen> {
 
           Timer(const Duration(milliseconds: 500), () async {
 
-          FilePickerResult? result = await FilePicker.platform.pickFiles(
+          final PlatformFile? picked = await FilePicker.pickFile(
             type: FileType.custom,
             allowedExtensions: ['txt'],
           );
 
 
-          if (result != null) {
-            Uint8List fileBytes = result.files.first.bytes!;
-            _fileName = result.files.first.name;
+          if (picked != null) {
+            Uint8List fileBytes = await picked.readAsBytes();
+            _fileName = picked.name;
             // Convert file bytes to string
 
             fileContent = String.fromCharCodes(fileBytes);
@@ -312,8 +312,7 @@ class _HomescreenState extends State<Homescreen> {
           Timer(const Duration(milliseconds: 500), () {
             _speak("Goodbye, honey.");
             Timer(const Duration(seconds: 2), () {
-              js.context.callMethod('open', ['about:blank', '_self']);
-              js.context.callMethod('close');
+              closeTab();
             });
           });
         } else {
@@ -344,20 +343,20 @@ class _HomescreenState extends State<Homescreen> {
     try {
       await _flutterTts.setVoice({"name": "Microsoft Aria Online (Natural) - English (United States)", "locale": "en-US"});
       await _flutterTts.setSpeechRate(1.25);
-      _flutterTtsInitialized = true;
+      if (!mounted) return;
       setState(() {});
 
     } catch (e) {
-      print("Error initializing TTS: $e");
+      debugPrint("Error initializing TTS: $e");
     }
   }
 
 
-  Future<void> _speak(text) async{
+  Future<void> _speak(String text) async{
     try {
       await _flutterTts.speak(text);
     } catch (e) {
-      print("Error speaking: $e");
+      debugPrint("Error speaking: $e");
     }
   }
 
@@ -365,7 +364,7 @@ class _HomescreenState extends State<Homescreen> {
     try {
       await _flutterTts.stop();
     } catch (e) {
-      print("Error stopping speaking: $e");
+      debugPrint("Error stopping speaking: $e");
     }
   }
 
@@ -373,22 +372,24 @@ class _HomescreenState extends State<Homescreen> {
     try {
       if (!_speechToText.isListening) { // Ensure recognition is not already active
         await _speechToText.listen(onResult: _onSpeechResult);
+        if (!mounted) return;
         _responseSpoken = false; // Reset the flag
         setState(() {});
       } else {
-        print("Speech recognition is already active."); // Log a message if recognition is already active
+        debugPrint("Speech recognition is already active."); // Log a message if recognition is already active
       }
     } catch (e) {
-      print("Error starting listening: $e");
+      debugPrint("Error starting listening: $e");
     }
   }
 
   Future<void> _stopListening() async {
     try {
       await _speechToText.stop();
+      if (!mounted) return;
       setState(() {});
     } catch (e) {
-      print("Error stopping listening: $e");
+      debugPrint("Error stopping listening: $e");
     }
   }
 
@@ -415,7 +416,7 @@ class _HomescreenState extends State<Homescreen> {
       await Future.delayed(const Duration(milliseconds: 500)); // Delay for a short period
       await _startListening(); // Restart listening
     } catch (e) {
-      print("Error stopping and restarting listening: $e");
+      debugPrint("Error stopping and restarting listening: $e");
     } finally {
       _isStoppingAndRestarting = false; // Reset flag after completion
     }
@@ -432,13 +433,10 @@ class _HomescreenState extends State<Homescreen> {
             children: [
               Center(
 
-                child: Container(
-
-                  child: Image.asset(
+                child: Image.asset(
                     'assets/background/HomePageBackground.png', // Replace with your image path
                     fit: BoxFit.fitHeight,
                   ),
-                ),
               ),
               const Center(
                 child: Column(
@@ -477,12 +475,10 @@ class _HomescreenState extends State<Homescreen> {
               children: [
                 // Background Image
                 Center(
-                  child: Container(
-                    child: Image.asset(
+                  child: Image.asset(
                       'assets/background/HomePageBackground.png', // Replace with your image path
                       fit: BoxFit.fitHeight,
                     ),
-                  ),
                 ),
 
                 //Time Widget
@@ -539,14 +535,14 @@ class _HomescreenState extends State<Homescreen> {
                           Timer(const Duration(milliseconds: 100), () async {
                             fileExplorerShown = true;
                            _speak("Please choose a file to open.");
-                           FilePickerResult? result = await FilePicker.platform.pickFiles(
+                           final PlatformFile? picked = await FilePicker.pickFile(
                              type: FileType.custom,
                               allowedExtensions: ['txt'],
                            );
 
-                           if (result != null) {
-                             Uint8List fileBytes = result.files.first.bytes!;
-                             _fileName = result.files.first.name;
+                           if (picked != null) {
+                             Uint8List fileBytes = await picked.readAsBytes();
+                             _fileName = picked.name;
                              // Convert file bytes to string
                              fileContent = String.fromCharCodes(fileBytes);
                              _speak("I have opened the file.");
@@ -616,8 +612,7 @@ class _HomescreenState extends State<Homescreen> {
                             Timer(const Duration(milliseconds: 500), () {
                               _speak("Goodbye, honey.");
                               Timer(const Duration(seconds: 2), () {
-                                js.context.callMethod('open', ['about:blank', '_self']);
-                                js.context.callMethod('close');
+                                closeTab();
                               });
                             });
                           } else {
@@ -722,7 +717,7 @@ class TimeWidget extends StatefulWidget {
   const TimeWidget({super.key});
 
   @override
-  _TimeWidgetState createState() => _TimeWidgetState();
+  State<TimeWidget> createState() => _TimeWidgetState();
 }
 
 class _TimeWidgetState extends State<TimeWidget> {
@@ -799,8 +794,7 @@ class _TimeWidgetState extends State<TimeWidget> {
             endIndent: 30, // Set the space after the divider
           ),
           const SizedBox(width: 10,),
-          Container(
-            child: Stack(
+          Stack(
               alignment: Alignment.topCenter,
               children: [
                 Text(
@@ -823,7 +817,6 @@ class _TimeWidgetState extends State<TimeWidget> {
                   ),
               ],
             ),
-          ),
         ],
       ),
     );
@@ -930,11 +923,9 @@ class _DateWidgetState extends State<DateWidget> {
       child: Stack(
         children: [
           Center(
-            child: Container(
-              child: Image.asset(
+            child: Image.asset(
                 'assets/background/date_background.png', // Replace with your image path
               ),
-            ),
           ),
           Center(
             child: Column(
@@ -1015,11 +1006,9 @@ class _HoneyWidgetState extends State<HoneyWidget>{
       child: Stack(
         children: [
           Center(
-            child: Container(
-              child: Image.asset(
+            child: Image.asset(
                 'assets/background/honey_background.png', // Replace with your image path
               ),
-            ),
           ),
         ],
       ),

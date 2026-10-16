@@ -42,8 +42,15 @@ app.*.map.json
 /android/app/profile
 /android/app/release
 
-# Firebase client config for your own project (see README, Firebase setup)
-/lib/firebase_options.dart
-/android/app/google-services.json
-/ios/Runner/GoogleService-Info.plist
-/macos/Runner/GoogleService-Info.plist
+# Firebase project config: never committed (copy config/firebase.example.json)
+/config/firebase.json
+/config/*.local.json
+google-services.json
+GoogleService-Info.plist
+firebase_app_id_file.json
+firebase-debug.log
+firestore-debug.log
+.firebase/
+.env
+.env.*
+!.env.example

@@ -1,102 +1,121 @@
 # HoneyOS
 
-![HoneyOS running on a local stack: boot animation, register a user, log in, ask Honey for the date by voice, then create a folder and a text file that persist](docs/demo.gif)
+[![CI](https://github.com/Exalt24/HoneyOS/actions/workflows/ci.yml/badge.svg)](https://github.com/Exalt24/HoneyOS/actions/workflows/ci.yml)
 
-*Recorded from the real app on one machine: a Flutter web build against local Firebase emulators, with the microphone stubbed (two spoken commands are injected). Nothing is deployed anywhere.*
+A voice-driven desktop operating-system simulation in Flutter: boot, pick a user, log in, and manage files by talking to it.
 
-A desktop operating-system simulation built with Flutter for a university project. It boots into a hexagon user picker, logs users in, and gives each of them a small file system, and the whole thing can be driven by voice: you say "Honey, tell me the date, please" and the assistant answers.
+![HoneyOS running against local Firebase emulators: register a user, log in, ask Honey for the date by voice, then create a folder and a text file and reopen it](docs/demo.gif)
 
-## What it does
+*A Flutter web build against the Firebase emulators on one machine: register, log in, the date by voice, then a folder and a file that persist. The microphone is stubbed in the recording (two spoken commands are injected); everything else is real clicks and typing. [Full quality mp4](docs/demo.mp4).*
 
-- **Boot and user picker.** A bee boot animation (about 3 seconds), then a honeycomb of up to 10 user slots. An empty slot is a "+" that opens registration.
-- **Register and log in.** A username and a password, each capped at 10 characters, plus a profile picture (a default one, or a photo you pick, uploaded to Firebase Storage). Logging in is a password field or a spoken "Honey, the password is ..., please".
-- **Home screen.** A clock and greeting, with six tiles: Tell me about Honey, Open a File, Create a File, Tell me the Date, View Files and Buzz Out.
-- **Voice control.** Speech recognition (`speech_to_text`) and spoken replies (`flutter_tts`). A command has to start with "honey" and end with "please". The home screen understands create a file, view files, open a file, tell me about honey, tell me the date, go back, buzz out and help. The editor adds save, save as, undo the changes, redo the changes, clear all, write the following, read the text, name it and go home.
-- **File system.** View Files shows the disks ("Local Disk C"), and inside a disk you can create folders and text files, open a file, and edit it in a small editor with Save, Save As, Undo and Redo. Folders and files are stored in Cloud Firestore and belong to the user who made them. Rename and delete are in the code (`lib/UI/file.dart`) but I did not drive them in the recording.
+12 unit and widget tests pass, `flutter analyze` reports no issues, and 24 security-rule checks pass against both the emulator and a real Firebase project on the free Spark plan.
 
-## What I ran
+## What it is
 
-On 11 Oct 2026, Flutter 3.47.7 (Dart 3.13.5), Chromium, the Firebase emulators for Firestore and Storage:
+HoneyOS started as a university project about modelling an operating-system interface with voice as the main input. It boots into a hexagon user picker, logs users in, and gives each of them a small file system. You say "Honey, tell me the date, please" and the assistant answers; a command has to start with "honey" and end with "please".
 
-1. Registered a user with the default picture.
-2. Logged in with the typed password.
-3. Said "honey tell me the date please" and got the date dialog, then "honey go back please" to close it.
-4. Created a folder `HiveNotes` on disk C, created a file in it, typed a line, saved, reopened it and saw the line again.
+- **Users.** A honeycomb of up to 10 slots. An empty slot is a "+" that opens registration: a username (10 characters at most), a password (6 to 10) and an optional profile picture.
+- **Home screen.** A clock and six tiles: Tell me about Honey, Open a File, Create a File, Tell me the Date, View Files and Buzz Out. Speech recognition (`speech_to_text`) and spoken replies (`flutter_tts`) drive the same actions.
+- **Files.** View Files shows the disk ("Local Disk C"). Inside it you create folders and text files, open them, and edit in a small editor with Save, Save As, Undo and Redo. Everything is stored in Cloud Firestore and belongs to the user who made it.
 
-The microphone part is simulated: headless Chromium has no speech engine, so the recording script replaces the browser's `SpeechRecognition` object with a stub and feeds it those two phrases. Everything else in the clip is real clicks and typing against the real app. A real microphone path was not exercised.
+## What changed in the October 2026 rebuild
 
-## Run it locally
+The original app was written against Firebase packages from early 2024 and an old Firebase project whose API key had been committed. I rebuilt it so a fresh clone runs on a new project and nothing project-specific is in git.
 
-You need the Flutter SDK, Node 18 or newer, JDK 21 or newer (for the emulators) and Chrome or Edge. This is the setup the recording used, with no hosted Firebase involved. The repo does not track Firebase config, so a fresh clone needs the placeholder file from step 0 before it compiles.
+| Before | Now |
+| --- | --- |
+| Firebase key and `google-services.json` in the repo | Config comes from a git-ignored `config/firebase.json` passed with `--dart-define-from-file`; the repo holds only `config/firebase.example.json` |
+| Users were Firestore documents with the password stored as plain text | Firebase Authentication (email and password). The username is mapped to a fixed address of the form `<hex of the username>@honeyos.invalid`; no password is stored anywhere in Firestore |
+| Rules were wide open because there was no identity to check | `firebase/firestore.rules`: a user can only read, create, rename and delete their own folders and files; the profile list is public because the picker needs it before anyone signs in |
+| Profile pictures in Cloud Storage | A 128 px PNG inside the user document. Cloud Storage now requires a paid plan on new projects, and this keeps the whole app on the free Spark plan |
+| `firebase_core` 2, `cloud_firestore` 4, `file_picker` 8, `speech_to_text` 6 and the rest | Current majors: `firebase_core` 5, `cloud_firestore` 7, `firebase_auth` 7, `file_picker` 13, `speech_to_text` 7, `open_file` 4, `flutter_lints` 6 (Flutter 3.47, Dart 3.13) |
+| `dart:js` to close the tab, 163 analyzer findings | `package:web` behind a conditional import (so tests run on the Dart VM), no analyzer findings |
+| The default Flutter counter test | 12 tests: voice-command parsing, account rules and the boot and setup screens |
 
-```bash
-# 0. Create the config file the app imports, then set projectId to honeyos and storageBucket to honeyos.appspot.com in it
-#    (the ids the emulator and seed script use; no real project is contacted)
-cp lib/firebase_options.dart.example lib/firebase_options.dart
+The first sign-in on a brand-new project creates the shared disk document by itself (the rules allow exactly that one document), so there is no seed script any more.
 
-# 1. Start the Firebase emulators (Firestore on 8080, Storage on 9199)
-npx firebase-tools emulators:start --only firestore,storage --project honeyos --config emulator/firebase.json
+## Architecture
 
-# 2. In a second terminal: add the disk and the default profile picture the app expects
-node emulator/seed.mjs
-
-# 3. Build the web app pointed at the emulators and serve it
-flutter pub get
-flutter build web --release --no-web-resources-cdn --dart-define=FIREBASE_EMULATOR_HOST=127.0.0.1
-cd build/web && python -m http.server 8000
+```mermaid
+flowchart LR
+  A[Flutter web app] -- email and password --> B[Firebase Authentication]
+  A -- users, FileSystem --> C[Cloud Firestore]
+  D[firestore.rules] -- checks every request against the uid --> C
+  E[Browser speech APIs] -- recognized text --> A
+  A -- spoken replies --> E
 ```
 
-Then open http://localhost:8000 in Chrome or Edge and allow the microphone when asked.
+`lib/core/` holds the pure Dart logic (voice-command parsing, username and password rules, avatar encoding). `lib/services/accounts.dart` is the only code that touches Authentication. `lib/UI/` has one file per screen.
 
-- The emulator rules in `emulator/` are wide open on purpose; they are for local use only.
-- Without `FIREBASE_EMULATOR_HOST` the app talks to whatever Firebase project your config files point at (see Firebase setup below). There is no hosted copy.
-- For the recording the emulators ran on ports 4901 and 4902 because the defaults were taken on my machine, so I built with `--dart-define=FIRESTORE_EMULATOR_PORT=4901 --dart-define=STORAGE_EMULATOR_PORT=4902`. Those two defines exist for exactly that.
-- Even with the emulators, the page loads the Firebase JavaScript SDK from Google's CDN, so it needs internet access.
-- On Windows, `flutter pub get` needs Developer Mode switched on so plugins can create symlinks.
+## Run it locally with the emulators
 
-## Firebase setup
+You need the Flutter SDK, Node 18 or newer, JDK 21 or newer and Chrome or Edge. No Firebase account is involved.
 
-To run against a real backend instead of the emulators, use your own Firebase project. The repo ships no project config: the generated files are git-ignored and `.example` files beside them show their shape.
+```bash
+npx firebase-tools emulators:start --only auth,firestore --project demo-honeyos --config firebase/firebase.json
+```
 
-1. Create a Firebase project and enable Cloud Firestore and Cloud Storage. They are the only services the app uses.
-2. Run `flutterfire configure` in the repo root. It writes `lib/firebase_options.dart`, `android/app/google-services.json`, `ios/Runner/GoogleService-Info.plist` and `macos/Runner/GoogleService-Info.plist`. `lib/main.dart` reads only the web options; the other platforms pick up their own file.
-3. In the Google Cloud console (APIs and Services, Credentials), restrict your key to your bundle ids and to the Firestore and Cloud Storage APIs, and write security rules for both, since the emulator rules in `emulator/` are open.
+In a second terminal:
+
+```bash
+flutter pub get
+flutter build web --release --no-web-resources-cdn --dart-define=FIREBASE_EMULATOR_HOST=127.0.0.1
+python -m http.server 8000 --directory build/web
+```
+
+Open http://localhost:8000 and allow the microphone when asked. If the default ports (8080 for Firestore, 9099 for Auth) are taken, change them in `firebase/firebase.json` and add `--dart-define=FIRESTORE_EMULATOR_PORT=<port> --dart-define=AUTH_EMULATOR_PORT=<port>` to the build.
+
+## Run it against your own Firebase project
+
+The free Spark plan is enough, and no payment method is needed.
+
+1. Create a Firebase project and register a Web app.
+2. Authentication: turn on the Email/Password provider.
+3. Firestore: create a database, then publish `firebase/firestore.rules` (paste it in the Rules tab, or run `npx firebase-tools deploy --only firestore:rules --config firebase/firebase.json` with `--project` set to your project id).
+4. Copy `config/firebase.example.json` to `config/firebase.json` and fill in the values from Project settings. The file is git-ignored.
+5. Run it:
+
+```bash
+flutter run -d chrome --dart-define-from-file=config/firebase.json
+```
+
+A web API key identifies your project to the browser and is not a secret, but restrict it to your own site (Google Cloud console, Credentials, HTTP referrers). Without any config the app shows a short setup message instead of crashing.
+
+Cloud Storage is not used and does not need to be enabled.
+
+## Tests
+
+```bash
+flutter analyze
+flutter test
+```
+
+`test/core_test.dart` covers the voice-command parsing and the account rules; `test/widget_test.dart` checks the boot screen and the no-project setup screen. The security rules have their own end-to-end check that signs up two throwaway users and sends real requests (24 checks: who may read, create, rename and delete what):
+
+```bash
+node firebase/rules_check.mjs --emulator
+node firebase/rules_check.mjs --config config/firebase.json
+```
+
+The second form runs against your hosted project and deletes everything it created. Add `REFERER=http://localhost:8000/` if you restricted the API key by referrer.
 
 ## Limits worth knowing
 
-- **Web only.** `lib/UI/homescreen.dart` imports `dart:js`, which exists only on the web. A test build on the Dart VM stops with "Dart library 'dart:js' is not available on this platform", and an Android or iOS build hits the same wall. The platform folders are the unmodified Flutter scaffold. I only built and ran the web target.
-- **Accounts are not Firebase Authentication.** A user is a document in the Firestore `users` collection with the password stored as plain text, and login compares what you type with that field. That is fine for a coursework demo and not something to put real passwords into.
-- **Needs speech support in the browser.** Until the browser's speech recognizer starts, the user picker shows a "Bzzzing..." spinner. Chrome and Edge provide it; I tested neither with a real microphone.
-- **Seed data is expected.** The register screen downloads `DEPOLTIMEJ.jpg` from Storage as the default picture, and View Files lists disk documents from the `FileSystem` collection. On an empty backend there is no default picture and no disk, which is what `emulator/seed.mjs` fixes.
-- **Tests.** `test/widget_test.dart` is the unmodified Flutter counter template and does not apply to this app.
+- **Web only.** The voice features use the browser's speech APIs, and the platform folders (`android`, `ios`, `windows` and so on) are the unmodified Flutter scaffold. Only the web target is built and tested.
+- **The microphone path is not covered by a real microphone.** Headless Chromium has no speech engine, so the recording and my checks inject recognized phrases. Chrome and Edge provide the recognizer; I did not test with a person speaking.
+- **The profile list is public.** Names and small pictures are readable by anyone, because the user picker shows them before login. Passwords are never in Firestore.
+- **A username is not a mailbox.** The generated address is never mailed, so there is no password reset.
+- **Voice right after a screen change can be dropped.** The recognizer is shared between screens and needs a moment to hand over, so a command spoken in the first second on a new screen may be missed. Typing always works.
+- **Free-tier ceilings apply:** Firestore's daily read and write quota on Spark, and the 1 MiB document limit (text files are capped at 200,000 characters by the rules).
 
-## Tech stack
+## Security note
 
-Flutter and Dart. `cloud_firestore`, `firebase_storage` and `firebase_core` for the backend, `speech_to_text` and `flutter_tts` for voice, `file_picker` and `open_file` for local files, and `hexagon` for the honeycomb layout.
+Earlier versions of this repo committed the Firebase client config of the author's original project, and that config is still in the git history. That project is abandoned, nothing here uses it any more, and the app now runs on a new project whose config is never committed. Firebase client keys identify a project rather than grant access to it; what protects data is the rules in `firebase/firestore.rules`.
 
-## Project structure
+## Stack
 
-```
-lib/
-  main.dart              Entry point, optional emulator switch
-  firebase_options.dart  Your FlutterFire config (git-ignored, see firebase_options.dart.example)
-  UI/
-    loadingscreen.dart   Boot animation
-    userscreen.dart      Hexagon user picker
-    userRegister.dart    Registration
-    userLogin.dart       Login
-    homescreen.dart      Home tiles and voice commands
-    viewfiles.dart       This PC: the list of disks
-    file.dart            Folder and file browser inside a disk
-    filescreen.dart      Text editor with Save, Save As, Undo, Redo
-emulator/                Firebase emulator config, open rules and seed script
-docs/demo.gif            The recording at the top of this page
-```
+Flutter and Dart, `firebase_auth`, `cloud_firestore`, `firebase_core`, `speech_to_text`, `flutter_tts`, `file_picker`, `open_file`, `hexagon`, `package:web`.
 
-## Security
+## License
 
-The Firebase client config for the author's own project was committed in earlier versions and remains in the git history; it is no longer tracked. Firebase client keys identify a project rather than grant access, so what protects data is Firestore and Storage security rules, which this repo does not ship for a hosted project. The emulator rules in `emulator/` are open and are for local use only.
-
-## Context
-
-HoneyOS was built as a university project exploring how to model an operating-system interface, with voice as the main input, as a Flutter application backed by a cloud service.
+MIT, see [LICENSE](LICENSE).

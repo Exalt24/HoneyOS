@@ -1,12 +1,12 @@
 {
-    "name": "honey_os",
-    "short_name": "honey_os",
+    "name": "HoneyOS",
+    "short_name": "HoneyOS",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
-    "orientation": "portrait-primary",
+    "background_color": "#ED8C00",
+    "theme_color": "#ED8C00",
+    "description": "HoneyOS, a voice-driven operating-system simulation built with Flutter.",
+    "orientation": "landscape-primary",
     "prefer_related_applications": false,
     "icons": [
         {

@@ -1,60 +1,46 @@
 import 'dart:async';
-import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:hexagon/hexagon.dart';
 import 'package:honey_os/UI/userscreen.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:speech_to_text/speech_to_text.dart';
 import 'package:speech_to_text/speech_recognition_result.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:http/http.dart' as http;
-import 'package:firebase_storage/firebase_storage.dart';
+import 'package:honey_os/core/account_rules.dart';
+import 'package:honey_os/core/avatar.dart';
+import 'package:honey_os/core/voice.dart';
+import 'package:honey_os/services/accounts.dart';
 
 
-class userRegister extends StatefulWidget {
-  const userRegister({super.key});
+class UserRegister extends StatefulWidget {
+  const UserRegister({super.key});
 
   @override
-  State<userRegister> createState() => _userRegisterState();
+  State<UserRegister> createState() => _UserRegisterState();
 }
 
-class _userRegisterState extends State<userRegister> {
+class _UserRegisterState extends State<UserRegister> {
   final TextEditingController _passController = TextEditingController();
   final TextEditingController _nameController = TextEditingController();
   String _password = '';
   String _name = '';
-  final CollectionReference users = FirebaseFirestore.instance.collection('users');
+  final Accounts _accounts = Accounts();
   final FlutterTts _flutterTts = FlutterTts();
-  bool _flutterTtsInitialized = false;
   final SpeechToText _speechToText = SpeechToText();
-  bool _speechEnabled = true;
   String _lastWords = '';
   String command =  '';
   bool _isStoppingAndRestarting = false;
   bool _responseSpoken = false; // Add this variable
   bool stopRepeated = false;
   late Timer _speechCheckTimer;
-  String defaultUri = '';
   String imagePath = '';
   bool loadedState = false;
   Uint8List? imageBytes;
   final Duration _checkInterval = const Duration(milliseconds: 10); // Adjust the interval as needed
 
-  String trimStringFromWord(String input, String word) {
-    int index = input.indexOf(word);
-    if (index != -1) {
-      return input.substring(index);
-    } else {
-      // Word not found, return the original string
-      return input;
-    }
-  }
-
   @override
   void initState() {
-    fetchDefaultUri();
     _initSpeech();
     _initTTS();
     _startSpeechCheckTimer(); // Start the timer when the screen is initialized
@@ -67,17 +53,12 @@ class _userRegisterState extends State<userRegister> {
 
   /// This has to happen only once per app
   void _initSpeech() async {
-    _speechEnabled = await _speechToText.initialize();
+    await _speechToText.initialize();
+    if (!mounted) return;
     _startListening();
     setState(() {
 
     });
-  }
-
-  void fetchDefaultUri () async {
-    FirebaseStorage storage = FirebaseStorage.instance;
-    Reference ref = storage.ref().child("DEPOLTIMEJ.jpg");
-    defaultUri = await ref.getDownloadURL();
   }
 
   @override
@@ -92,6 +73,7 @@ class _userRegisterState extends State<userRegister> {
 
 
   void _onSpeechResult(SpeechRecognitionResult result) {
+    if (!mounted) return; // a late result for a screen that is already gone
     String recognizedWords = result.recognizedWords.toLowerCase();
 
     if (recognizedWords.contains("honey")) {
@@ -116,20 +98,20 @@ class _userRegisterState extends State<userRegister> {
     try {
       await _flutterTts.setVoice({"name": "Microsoft Aria Online (Natural) - English (United States)", "locale": "en-US"});
       await _flutterTts.setSpeechRate(1.25);
-      _flutterTtsInitialized = true;
+      if (!mounted) return;
       setState(() {});
 
     } catch (e) {
-      print("Error initializing TTS: $e");
+      debugPrint("Error initializing TTS: $e");
     }
   }
 
 
-  Future<void> _speak(text) async{
+  Future<void> _speak(String text) async{
     try {
       await _flutterTts.speak(text);
     } catch (e) {
-      print("Error speaking: $e");
+      debugPrint("Error speaking: $e");
     }
   }
 
@@ -137,7 +119,7 @@ class _userRegisterState extends State<userRegister> {
     try {
       await _flutterTts.stop();
     } catch (e) {
-      print("Error stopping speaking: $e");
+      debugPrint("Error stopping speaking: $e");
     }
   }
 
@@ -145,22 +127,24 @@ class _userRegisterState extends State<userRegister> {
     try {
       if (!_speechToText.isListening) { // Ensure recognition is not already active
         await _speechToText.listen(onResult: _onSpeechResult);
+        if (!mounted) return;
         _responseSpoken = false; // Reset the flag
         setState(() {});
       } else {
-        print("Speech recognition is already active."); // Log a message if recognition is already active
+        debugPrint("Speech recognition is already active."); // Log a message if recognition is already active
       }
     } catch (e) {
-      print("Error starting listening: $e");
+      debugPrint("Error starting listening: $e");
     }
   }
 
   Future<void> _stopListening() async {
     try {
       await _speechToText.stop();
+      if (!mounted) return;
       setState(() {});
     } catch (e) {
-      print("Error stopping listening: $e");
+      debugPrint("Error stopping listening: $e");
     }
   }
 
@@ -187,7 +171,7 @@ class _userRegisterState extends State<userRegister> {
       await Future.delayed(const Duration(milliseconds: 500)); // Delay for a short period
       await _startListening(); // Restart listening
     } catch (e) {
-      print("Error stopping and restarting listening: $e");
+      debugPrint("Error stopping and restarting listening: $e");
     } finally {
       _isStoppingAndRestarting = false; // Reset flag after completion
     }
@@ -197,19 +181,18 @@ class _userRegisterState extends State<userRegister> {
     _interruptSpeaking();
     Timer(const Duration(milliseconds: 500), () async {
       if (command.contains("username is")) {
-        _name = command.substring(command.indexOf("username is") + 12, command.indexOf(" please"));
-        if (_name.length > 10) {
-          _name = _name.substring(0, 10);
+        _name = (valueAfter(command, "username is") ?? '').replaceAll(" ", "");
+        if (_name.length > maxUsernameLength) {
+          _name = _name.substring(0, maxUsernameLength);
         }
         _nameController.text = _name;
         setState(() {
         });
         _speak("Your username is $_name. Is this correct?");
       } else if (command.contains("password is")) {
-        _password = command.substring(command.indexOf("password is") + 12, command.indexOf(" please"));
-        _password = _password.replaceAll(" ", "");
-        if (_password.length > 10) {
-          _password = _password.substring(0, 10);
+        _password = (valueAfter(command, "password is") ?? '').replaceAll(" ", "");
+        if (_password.length > maxPasswordLength) {
+          _password = _password.substring(0, maxPasswordLength);
         }
         _passController.text = _password;
         setState(() {
@@ -287,30 +270,13 @@ class _userRegisterState extends State<userRegister> {
 
   Future<void> registerUser() async {
     _speak("Registering you now.");
-    // Upload
-    if (imageBytes != null) {
-      FirebaseStorage storage = FirebaseStorage.instance;
-      Reference ref = storage.ref().child("profile_pictures/$_name.jpg");
-      await ref.putData(imageBytes!);
-      await users.add({
-        'name': _name,
-        'password': _password,
-        'profile_picture': await ref.getDownloadURL(),
-      });
-    } else {
-      var response = await http.get(Uri.parse(defaultUri));
-      Uint8List defaultImageBytes = response.bodyBytes;
-
-      // Upload the default image to Firebase Storage
-      FirebaseStorage storage = FirebaseStorage.instance;
-      Reference ref = storage.ref().child("profile_pictures/$_name.jpg");
-      await ref.putData(defaultImageBytes);
-      await users.add({
-        'name': _name,
-        'password': _password,
-        'profile_picture': await ref.getDownloadURL(),
-      });
-    }
+    // Creates the Firebase Authentication account and the profile document. The
+    // picture is shrunk and stored in the document itself (no Cloud Storage).
+    await _accounts.register(
+      username: _name,
+      password: _password,
+      pictureBase64: await encodeAvatar(imageBytes),
+    );
     _nameController.clear();
     _passController.clear();
     _name = '';
@@ -319,6 +285,7 @@ class _userRegisterState extends State<userRegister> {
     // Close the "Registering..." dialog first. Without this, pushReplacement
     // replaces the dialog route and leaves this register screen (and its
     // speech listener) alive underneath the user screen.
+    if (!mounted) return;
     Navigator.of(context).pop();
     Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const UserScreen()));
   }
@@ -329,7 +296,7 @@ class _userRegisterState extends State<userRegister> {
 
 
     Size size = MediaQuery.of(context).size;
-    if (!_speechToText.isListening && loadedState == false || defaultUri == '') {
+    if (!_speechToText.isListening && loadedState == false) {
       return Scaffold(
         backgroundColor: const Color.fromARGB(255, 237, 140, 0),
         body: Center(
@@ -337,13 +304,10 @@ class _userRegisterState extends State<userRegister> {
               children: [
                 Center(
 
-                  child: Container(
-
-                    child: Image.asset(
+                  child: Image.asset(
                       'assets/background/HomePageBackground.png', // Replace with your image path
                       fit: BoxFit.fitHeight,
                     ),
-                  ),
                 ),
                 const Center(
                   child: Column(
@@ -452,18 +416,16 @@ class _userRegisterState extends State<userRegister> {
                                   width: size.width *0.24,
                                   child: InkWell(
                                     onTap: () {
-                                      FilePicker.platform.pickFiles(
+                                      FilePicker.pickFile(
                                         type: FileType.image,
-                                        allowMultiple: false,
-                                      ).then((value) {
+                                      ).then((value) async {
                                         if (value != null) {
-                                          Uint8List? bytes = value.files.single.bytes;
-                                          if (bytes != null) {
-                                            _speak("Wow you look very handsome just like Sir Robert.");
-                                            setState(() {
-                                              imageBytes = bytes;
-                                            });
-                                          }
+                                          final Uint8List bytes = await value.readAsBytes();
+                                          if (!mounted) return;
+                                          _speak("Wow you look very handsome just like Sir Robert.");
+                                          setState(() {
+                                            imageBytes = bytes;
+                                          });
                                         }
                                       });
                                     },
@@ -472,8 +434,8 @@ class _userRegisterState extends State<userRegister> {
                                       imageBytes!,
                                       fit: BoxFit.fitHeight,
                                     )
-                                        : Image.network(
-                                      defaultUri,
+                                        : Image.asset(
+                                      defaultAvatarAsset,
                                       fit: BoxFit.fitHeight,
                                     ),
                                   ),

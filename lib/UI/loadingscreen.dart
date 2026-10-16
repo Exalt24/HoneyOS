@@ -6,7 +6,7 @@ class LoadingScreen extends StatefulWidget{
   const LoadingScreen({super.key});
 
   @override
-  _LoadingScreen createState() => _LoadingScreen();
+  State<LoadingScreen> createState() => _LoadingScreen();
 }
 
 class _LoadingScreen extends State<LoadingScreen> {
@@ -36,13 +36,11 @@ class _LoadingScreen extends State<LoadingScreen> {
   Widget build(BuildContext context) {
     Size size = MediaQuery.of(context).size;
     return Scaffold(
-      body: Container(
-        child: SizedBox(
+      body: SizedBox(
           width: size.width,
           height: size.height,
           child: Image.asset('assets/newloadingscreen.gif', fit: BoxFit.fill),
         ),
-      ),
     );
   }
 }
