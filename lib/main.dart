@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:honey_os/UI/loadingscreen.dart';
+import 'package:honey_os/firebase_options.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
@@ -19,17 +20,7 @@ Future<void> main() async {
 
   WidgetsFlutterBinding.ensureInitialized();
   if (kIsWeb) {
-    await Firebase.initializeApp(
-        options: const FirebaseOptions(
-            apiKey: "AIzaSyDbjhOy1ajDq0p70iiYViPs7j4xMUF2EQ0",
-            authDomain: "honeyos.firebaseapp.com",
-            projectId: "honeyos",
-            storageBucket: "honeyos.appspot.com",
-            messagingSenderId: "569652837811",
-            appId: "1:569652837811:web:0e768cf76e09f55a405fc6",
-            measurementId: "G-EG39SH3ZZQ"
-        )
-    );
+    await Firebase.initializeApp(options: DefaultFirebaseOptions.web);
     print('Firebase initialized');
   } else {
     await Firebase.initializeApp();
