@@ -110,7 +110,7 @@ The second form runs against your hosted project and deletes everything it creat
 
 ## Security note
 
-Earlier versions of this repo committed the Firebase client config of the author's original project, and that config is still in the git history. That project is abandoned, nothing here uses it any more, and the app now runs on a new project whose config is never committed. Firebase client keys identify a project rather than grant access to it; what protects data is the rules in `firebase/firestore.rules`.
+Earlier versions of this repo committed the Firebase client config of my original project (id `honeyos`), and that config is still in the git history. The app no longer uses it: it now runs on a different project whose config is never committed. I have not deleted the original project, and I cannot tell from outside whether it still exists, so treat its old key as public and its old data as readable. Firebase client keys identify a project rather than grant access to it; what protects data in a project is its rules, and the rules for the current setup are in `firebase/firestore.rules`.
 
 ## Stack
 
