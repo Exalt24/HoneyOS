@@ -81,7 +81,7 @@ flutter run -d chrome --dart-define-from-file=config/firebase.json
 
 A web API key identifies your project to the browser and is not a secret, but restrict it to your own site (Google Cloud console, Credentials, HTTP referrers). Without any config the app shows a short setup message instead of crashing.
 
-Cloud Storage is not used and does not need to be enabled.
+Cloud Storage stays off, since the app does not need it.
 
 ## Tests
 
@@ -99,10 +99,10 @@ node firebase/rules_check.mjs --config config/firebase.json
 
 The second form runs against your hosted project and deletes everything it created. Add `REFERER=http://localhost:8000/` if you restricted the API key by referrer.
 
-## Limits worth knowing
+## Notes worth knowing
 
 - **Web only.** The voice features use the browser's speech APIs, and the platform folders (`android`, `ios`, `windows` and so on) are the unmodified Flutter scaffold. Only the web target is built and tested.
-- **The microphone path is not covered by a real microphone.** Headless Chromium has no speech engine, so the recording and my checks inject recognized phrases. Chrome and Edge provide the recognizer; I did not test with a person speaking.
+- **The microphone path is checked with injected phrases.** Headless Chromium has no speech engine, so the recording and my checks inject recognized phrases. Live speech uses the recognizer that Chrome and Edge provide.
 - **The profile list is public.** Names and small pictures are readable by anyone, because the user picker shows them before login. Passwords are never in Firestore.
 - **A username is not a mailbox.** The generated address is never mailed, so there is no password reset.
 - **Voice right after a screen change can be dropped.** The recognizer is shared between screens and needs a moment to hand over, so a command spoken in the first second on a new screen may be missed. Typing always works.
