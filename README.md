@@ -8,19 +8,19 @@ A voice-driven desktop operating-system simulation in Flutter: boot, pick a user
 
 *A Flutter web build against the Firebase emulators on one machine: register, log in, the date by voice, then a folder and a file that persist. The microphone is stubbed in the recording (two spoken commands are injected); everything else is real clicks and typing. [Full quality mp4](docs/demo.mp4).*
 
-12 unit and widget tests pass, `flutter analyze` reports no issues, and 24 security-rule checks pass against both the emulator and a real Firebase project on the free Spark plan.
+12 unit and widget tests pass, and `flutter analyze` reports no issues. 24 security-rule checks pass against both the emulator and a real Firebase project on the free Spark plan.
 
 ## What it is
 
-HoneyOS started as a university project about modelling an operating-system interface with voice as the main input. It boots into a hexagon user picker, logs users in, and gives each of them a small file system. You say "Honey, tell me the date, please" and the assistant answers; a command has to start with "honey" and end with "please".
+HoneyOS started as a university project about modelling an operating-system interface with voice as the main input. It boots into a hexagon user picker, logs users in, and gives each of them a small file system. You say "Honey, tell me the date, please" and the assistant answers. A command has to start with "honey" and end with "please".
 
-- **Users.** A honeycomb of up to 10 slots. An empty slot is a "+" that opens registration: a username (10 characters at most), a password (6 to 10) and an optional profile picture.
-- **Home screen.** A clock and six tiles: Tell me about Honey, Open a File, Create a File, Tell me the Date, View Files and Buzz Out. Speech recognition (`speech_to_text`) and spoken replies (`flutter_tts`) drive the same actions.
-- **Files.** View Files shows the disk ("Local Disk C"). Inside it you create folders and text files, open them, and edit in a small editor with Save, Save As, Undo and Redo. Everything is stored in Cloud Firestore and belongs to the user who made it.
+- **Users.** A honeycomb of up to 10 slots. An empty slot is a "+" that opens registration. You enter a username (10 characters at most), a password (6 to 10) and an optional profile picture.
+- **Home screen.** A clock and six tiles: Tell me about Honey, Open a File, Create a File, Tell me the Date, View Files and Buzz Out. Speech recognition (`speech_to_text`) drives the same actions. Spoken replies (`flutter_tts`) answer them.
+- **Files.** View Files shows the disk ("Local Disk C"). Inside it you create folders and text files and open them. A small editor has Save, Save As, Undo and Redo. Everything is stored in Cloud Firestore and belongs to the user who made it.
 
 ## What changed in the October 2026 rebuild
 
-The original app was written against Firebase packages from early 2024 and an old Firebase project whose API key had been committed. I rebuilt it so a fresh clone runs on a new project and nothing project-specific is in git.
+The original app was written against Firebase packages from early 2024. It used an old Firebase project whose API key had been committed. I rebuilt it so a fresh clone runs on a new project and nothing project-specific is in git.
 
 | Before | Now |
 | --- | --- |
@@ -32,7 +32,7 @@ The original app was written against Firebase packages from early 2024 and an ol
 | `dart:js` to close the tab, 163 analyzer findings | `package:web` behind a conditional import (so tests run on the Dart VM), no analyzer findings |
 | The default Flutter counter test | 12 tests: voice-command parsing, account rules and the boot and setup screens |
 
-The first sign-in on a brand-new project creates the shared disk document by itself (the rules allow exactly that one document), so there is no seed script any more.
+The first sign-in on a brand-new project creates the shared disk document by itself. The rules allow exactly that one document, so there is no seed script any more.
 
 ## Architecture
 
@@ -45,7 +45,7 @@ flowchart LR
   A -- spoken replies --> E
 ```
 
-`lib/core/` holds the pure Dart logic (voice-command parsing, username and password rules, avatar encoding). `lib/services/accounts.dart` is the only code that touches Authentication. `lib/UI/` has one file per screen.
+`lib/core/` holds the pure Dart logic: voice-command parsing, username and password rules, avatar encoding. `lib/services/accounts.dart` is the only code that touches Authentication. `lib/UI/` has one file per screen.
 
 ## Run it locally with the emulators
 
@@ -63,7 +63,7 @@ flutter build web --release --no-web-resources-cdn --dart-define=FIREBASE_EMULAT
 python -m http.server 8000 --directory build/web
 ```
 
-Open http://localhost:8000 and allow the microphone when asked. If the default ports (8080 for Firestore, 9099 for Auth) are taken, change them in `firebase/firebase.json` and add `--dart-define=FIRESTORE_EMULATOR_PORT=<port> --dart-define=AUTH_EMULATOR_PORT=<port>` to the build.
+Open http://localhost:8000 and allow the microphone when asked. The default ports are 8080 for Firestore and 9099 for Auth. If they are taken, change them in `firebase/firebase.json`. Then add `--dart-define=FIRESTORE_EMULATOR_PORT=<port> --dart-define=AUTH_EMULATOR_PORT=<port>` to the build.
 
 ## Run it against your own Firebase project
 
@@ -79,7 +79,7 @@ The free Spark plan is enough, and no payment method is needed.
 flutter run -d chrome --dart-define-from-file=config/firebase.json
 ```
 
-A web API key identifies your project to the browser and is not a secret, but restrict it to your own site (Google Cloud console, Credentials, HTTP referrers). Without any config the app shows a short setup message instead of crashing.
+A web API key identifies your project to the browser and is not a secret. Restrict it to your own site anyway (Google Cloud console, Credentials, HTTP referrers). Without any config the app shows a short setup message instead of crashing.
 
 Cloud Storage stays off, since the app does not need it.
 
@@ -90,7 +90,7 @@ flutter analyze
 flutter test
 ```
 
-`test/core_test.dart` covers the voice-command parsing and the account rules; `test/widget_test.dart` checks the boot screen and the no-project setup screen. The security rules have their own end-to-end check that signs up two throwaway users and sends real requests (24 checks: who may read, create, rename and delete what):
+`test/core_test.dart` covers the voice-command parsing and the account rules. `test/widget_test.dart` checks the boot screen and the no-project setup screen. The security rules have their own end-to-end check. It signs up two throwaway users and sends real requests (24 checks: who may read, create, rename and delete what):
 
 ```bash
 node firebase/rules_check.mjs --emulator
@@ -101,16 +101,16 @@ The second form runs against your hosted project and deletes everything it creat
 
 ## Notes worth knowing
 
-- **Web only.** The voice features use the browser's speech APIs, and the platform folders (`android`, `ios`, `windows` and so on) are the unmodified Flutter scaffold. Only the web target is built and tested.
+- **Web only.** The voice features use the browser's speech APIs. The platform folders (`android`, `ios`, `windows` and so on) are the unmodified Flutter scaffold. Only the web target is built and tested.
 - **The microphone path is checked with injected phrases.** Headless Chromium has no speech engine, so the recording and my checks inject recognized phrases. Live speech uses the recognizer that Chrome and Edge provide.
 - **The profile list is public.** Names and small pictures are readable by anyone, because the user picker shows them before login. Passwords are never in Firestore.
 - **A username is not a mailbox.** The generated address is never mailed, so there is no password reset.
-- **Voice right after a screen change can be dropped.** The recognizer is shared between screens and needs a moment to hand over, so a command spoken in the first second on a new screen may be missed. Typing always works.
-- **Free-tier ceilings apply:** Firestore's daily read and write quota on Spark, and the 1 MiB document limit (text files are capped at 200,000 characters by the rules).
+- **Voice right after a screen change can be dropped.** The recognizer is shared between screens and needs a moment to hand over. A command spoken in the first second on a new screen may be missed. Typing always works.
+- **Free-tier ceilings apply.** Spark has a daily Firestore read and write quota. Documents are limited to 1 MiB, and the rules cap text files at 200,000 characters.
 
 ## Security note
 
-Earlier versions of this repo committed the Firebase client config of my original project (id `honeyos`), and that config is still in the git history. The app no longer uses it: it now runs on a different project whose config is never committed. I have not deleted the original project, and I cannot tell from outside whether it still exists, so treat its old key as public and its old data as readable. Firebase client keys identify a project rather than grant access to it; what protects data in a project is its rules, and the rules for the current setup are in `firebase/firestore.rules`.
+Earlier versions of this repo committed the Firebase client config of my original project (id `honeyos`). That config is still in the git history. The app no longer uses it. It now runs on a different project whose config is never committed. I have not deleted the original project, and I cannot tell from outside whether it still exists. Treat its old key as public and its old data as readable. Firebase client keys identify a project rather than grant access to it. What protects data in a project is its rules. The rules for the current setup are in `firebase/firestore.rules`.
 
 ## Stack
 
